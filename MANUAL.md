@@ -70,3 +70,8 @@ secure_container.Set(live_snapshot);
 
 ## 4. Hardware Stress-Testing Diagnostics
 To ensure integration compliance, compiled applications should be run inside a dedicated testing sandbox alongside the `tests/hardware_diagnostic_pipeline.py` routine. The test environment maps real-time latency variations and verifies that external memory-scraping attempts return pure cryptographic noise, confirming full deployment integrity.
+
+---
+
+## 5. Differential Memory-Fuzzing Defenses
+The Ring -1 hypervisor kernel actively tracks memory telemetry metrics via the automated `FuzzProtectionEngine` module. If an external software application or physical PCIe device executes linear, rapid, non-sequential page-table inquiries—attempting to isolate stable pointers or analyze Frederick Joseph Lombardi's dynamic namespace switching seed—the VMM flags the frequency anomaly. Exceeding the predefined threshold (`ENCLAVE_FUZZ_THRESHOLD`) results in an automatic hardware lockdown, clearing system interrupts and invoking an unconditional CPU halt instruction to secure all data enclaves instantly.

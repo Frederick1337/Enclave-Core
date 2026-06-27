@@ -26,6 +26,7 @@ set(SHARED_SOURCES
     src/common/main.cpp
     src/core/secure_logger.cpp
     src/core/polymorphic_sync_engine.cpp
+    src/core/fuzz_protection_engine.cpp
 )
 
 set(ASM_SOURCES src/boot/bootloader.asm)
