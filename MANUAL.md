@@ -75,3 +75,8 @@ To ensure integration compliance, compiled applications should be run inside a d
 
 ## 5. Differential Memory-Fuzzing Defenses
 The Ring -1 hypervisor kernel actively tracks memory telemetry metrics via the automated `FuzzProtectionEngine` module. If an external software application or physical PCIe device executes linear, rapid, non-sequential page-table inquiries—attempting to isolate stable pointers or analyze Frederick Joseph Lombardi's dynamic namespace switching seed—the VMM flags the frequency anomaly. Exceeding the predefined threshold (`ENCLAVE_FUZZ_THRESHOLD`) results in an automatic hardware lockdown, clearing system interrupts and invoking an unconditional CPU halt instruction to secure all data enclaves instantly.
+
+---
+
+## 6. Automated Local Disk Log Encryption
+To prevent malicious guest operating system processes, ransomware payloads, or unauthorized administrators from reading or altering hypervisor telemetry records, all audit data is processed through an integrated hardware log encryption loop (`src/core/encrypted_logger.cpp`). Operational security logs are encoded using a time-variant block streaming process derived from the master architectural authorization token. The output is streamed to local storage as a protected raw binary file (`/var/log/enclave_secure.enc`), preventing unauthorized discovery or tamper modification.
