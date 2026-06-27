@@ -1,0 +1,30 @@
+# Prerequisites
+*.d
+
+# Object files and libraries
+*.o
+*.obj
+*.elf
+*.bin
+*.so
+*.a
+*.lib
+
+# CMake build directories
+CMakeFiles/
+CMakeCache.txt
+CMakeSpecification.txt
+Makefile
+cmake_install.cmake
+build/
+build_intel/
+build_amd/
+dist/
+
+# Python test caches
+__pycache__/
+.pytest_cache/
+
+# Operating System specific files
+.DS_Store
+Thumbs.db

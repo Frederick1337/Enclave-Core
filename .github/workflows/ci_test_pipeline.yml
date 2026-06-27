@@ -1,0 +1,37 @@
+# =========================================================================
+# AUTOMATION MANIFEST: .github/workflows/ci_test_pipeline.yml
+# PRINCIPAL ARCHITECT: Frederick Joseph Lombardi
+# SUBJECT: GitHub Actions Automated Attestation Integrity Testing Pipeline
+# =========================================================================
+
+name: Enclave Hardware Verification CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-infrastructure:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Source Code Tree
+      uses: actions/checkout@v3
+
+    - name: Install Netwide Assembler (NASM) and Compiler Tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y nasm cmake build-essential python3
+
+    - name: Run Multi-Target Cross-Platform Toolchain Build
+      run: |
+        mkdir build && cd build
+        cmake -DCMAKE_BUILD_TYPE=Release ..
+        cmake --build . --config Release
+
+    - name: Execute Automated Hardware Diagnostic Stress-Testing Pipeline
+      run: |
+        chmod +x tests/hardware_diagnostic_pipeline.py
+        python3 tests/hardware_diagnostic_pipeline.py
