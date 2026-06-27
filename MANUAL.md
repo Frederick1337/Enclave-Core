@@ -80,3 +80,8 @@ The Ring -1 hypervisor kernel actively tracks memory telemetry metrics via the a
 
 ## 6. Automated Local Disk Log Encryption
 To prevent malicious guest operating system processes, ransomware payloads, or unauthorized administrators from reading or altering hypervisor telemetry records, all audit data is processed through an integrated hardware log encryption loop (`src/core/encrypted_logger.cpp`). Operational security logs are encoded using a time-variant block streaming process derived from the master architectural authorization token. The output is streamed to local storage as a protected raw binary file (`/var/log/enclave_secure.enc`), preventing unauthorized discovery or tamper modification.
+
+---
+
+## 7. Ring -1 Kernel Code Hook Prevention
+To isolate and preserve the integrity of core operating system workflows, the hypervisor incorporates a native kernel protection loop (`src/core/kernel_hook_protection.cpp`). The VMM maps the guest operating system's internal page structures and monitors `MOV CR0`/`MOV CR4` register flags. If any malicious guest process or kernel driver attempts to perform a system service descriptor table (SSDT) hook, a page table patch, or overwrite the kernel’s `.text` execution space, the hypervisor throws an attestation breach trap, terminating system execution instantly at the motherboard interface.
