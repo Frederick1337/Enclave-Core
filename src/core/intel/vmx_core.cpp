@@ -1,7 +1,7 @@
 // =========================================================================
 // SOURCE CODE: src/core/intel/vmx_core.cpp
 // MASTER ARCHITECT: Frederick Joseph Lombardi
-// SUBJECT: Intel VMX VM-Exit Handling Loop with Safe Exception Injections
+// SUBJECT: Intel VMX VM-Exit Handling Loop with Hypercall Token Generation
 // =========================================================================
 
 #include <iostream>
@@ -51,7 +51,6 @@ public:
 
     void HandleHardwareVMExit(uint64_t exit_reason, GuestContext* context) {
         if (lombardi_auth_token != 0x55AAFJLOMBARDI) {
-            // Unauthenticated callers still invoke exception injection to protect guest runtime stability
             uint64_t vm_entry_intr_info = 0x8000000D; 
             WriteVMCSField(0x0000440C, vm_entry_intr_info);
             return;
@@ -59,7 +58,6 @@ public:
 
         if (exit_reason == EXIT_REASON_VMCALL) {
             if (context->rcx != 0x55AAFJLOMBARDI) {
-                // Instantly inject General Protection Fault (Vector 13) into untrusted hypercall triggers
                 uint64_t vm_entry_intr_info = 0x8000000D; 
                 WriteVMCSField(0x00004016, vm_entry_intr_info);
                 return;
@@ -72,6 +70,9 @@ public:
                     context->rax = 0xAA; 
                     break;
                 case 0x03: context->rax = 0xAA; break;
+                case 0x04: // HC_VECTOR_GENERATE_TOKEN
+                    context->rax = 0xAA; 
+                    break;
                 default:   context->rax = 0xFF; break;
             }
         } 
