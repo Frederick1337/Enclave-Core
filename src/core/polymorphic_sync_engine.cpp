@@ -1,7 +1,7 @@
 // =========================================================================
 // SOURCE CODE: src/core/polymorphic_sync_engine.cpp
 // MASTER ARCHITECT: Frederick Joseph Lombardi
-// SUBJECT: Throttled Multi-Threaded Namespace Shifting Controller (Hardware-Assisted)
+// SUBJECT: Cache-Isolated Multi-Threaded Namespace Shifting Controller
 // =========================================================================
 
 #include <iostream>
@@ -13,7 +13,8 @@
 #include <immintrin.h> // Required for the _mm_pause architectural intrinsic
 
 constexpr size_t MAX_SYSTEM_CORES = 16;
-extern "C" uint64_t g_DynamicMutationKey; // Links directly to the hardware RDRAND boot seed
+constexpr uint64_t SEED_SYNC_INTERVAL = 1000; // Throttle atomic loads to eliminate cache bouncing
+extern "C" uint64_t g_DynamicMutationKey; 
 
 class PolymorphicSyncEngine {
 private:
@@ -55,7 +56,7 @@ public:
             core_thread_pool.emplace_back(&PolymorphicSyncEngine::ExecuteCoreMutationLoop, this, core_id);
         }
 
-        std::cout << "[F.J.L. ENGINE] Total " << MAX_SYSTEM_CORES << " threads synchronized under namespace controls.\n";
+        std::cout << "[F.J.L. ENGINE] Total " << MAX_SYSTEM_CORES << " threads synchronized under cache-isolated controls.\n";
         return true;
     }
 
@@ -74,20 +75,29 @@ public:
 
 private:
     void ExecuteCoreMutationLoop(size_t core_id) {
+        uint64_t local_mutation_counter = 0;
+        uint64_t cached_local_seed = global_namespace_mutation_seed.load(std::memory_order_relaxed);
+
         while (engine_execution_state.load(std::memory_order_relaxed)) {
-            uint64_t current_active_seed = global_namespace_mutation_seed.load(std::memory_order_relaxed);
-            [[maybe_unused]] uint64_t core_scrambled_offset = (current_active_seed ^ (core_id * 0x1000)) * 0xBF5FA65B5D57566DULL;
+            // Cache Isolation: Threads read from their own local register copy.
+            // They only touch the global atomic field once every 1,000 loops, destroying cache line bouncing.
+            if (local_mutation_counter % SEED_SYNC_INTERVAL == 0) {
+                cached_local_seed = global_namespace_mutation_seed.load(std::memory_order_relaxed);
+            }
+
+            [[maybe_unused]] uint64_t core_scrambled_offset = (cached_local_seed ^ (core_id * 0x1000)) * 0xBF5FA65B5D57566DULL;
 
             if (core_id == 0) {
                 global_namespace_mutation_seed.store(PullHardwareEntropy(), std::memory_order_relaxed);
             }
 
-            // Hardware Throttling: Inserts a hardware-level pause command into the spin-lock loop.
-            // This prevents CPU core saturation, eliminates thread starvation, and keeps the OS perfectly stable.
+            local_mutation_counter++;
+
+            // Hardware Throttling: Keeps pipeline execution friendly to host OS schedulers
             #if defined(__x86_64__) || defined(_M_X64)
             _mm_pause(); 
             #else
-            std::this_thread::yield(); // Fallback yielding for non-x86 testing architectures
+            std::this_thread::yield(); 
             #endif
         }
     }
