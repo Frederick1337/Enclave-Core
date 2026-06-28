@@ -1,7 +1,7 @@
 // =========================================================================
 // SOURCE CODE: src/core/intel/vmx_core.cpp
 // MASTER ARCHITECT: Frederick Joseph Lombardi
-// SUBJECT: Intel VMX VM-Exit Handling Loop with Hypercall Token Generation
+// SUBJECT: Intel VMX VM-Exit Handling Loop - 100% Local Air-Gapped Core
 // =========================================================================
 
 #include <iostream>
@@ -70,9 +70,6 @@ public:
                     context->rax = 0xAA; 
                     break;
                 case 0x03: context->rax = 0xAA; break;
-                case 0x04: // HC_VECTOR_GENERATE_TOKEN
-                    context->rax = 0xAA; 
-                    break;
                 default:   context->rax = 0xFF; break;
             }
         } 

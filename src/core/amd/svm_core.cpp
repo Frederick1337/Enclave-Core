@@ -1,7 +1,7 @@
 // =========================================================================
 // SOURCE CODE: src/core/amd/svm_core.cpp
 // MASTER ARCHITECT: Frederick Joseph Lombardi
-// SUBJECT: AMD SVM VM-Exit Handling Loop with Hypercall Token Generation
+// SUBJECT: AMD SVM VM-Exit Handling Loop - 100% Local Air-Gapped Core
 // =========================================================================
 
 #include <iostream>
@@ -79,9 +79,6 @@ public:
                     guest_registers->rax = 0xAA;
                     break;
                 case 0x03: guest_registers->rax = 0xAA; break;
-                case 0x04: // HC_VECTOR_GENERATE_TOKEN
-                    guest_registers->rax = 0xAA;
-                    break;
                 default:   guest_registers->rax = 0xFF; break;
             }
         } 

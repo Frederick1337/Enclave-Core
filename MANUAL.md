@@ -21,7 +21,6 @@ Developers must pass the correct functional vector into the CPU registers to exe
 - **`0x01` (HC_VECTOR_QUERY_STATUS):** Pings the Ring -1 VMM to verify environment attestation. Returns `0xAA` if secure virtualization is active.
 - **`0x02` (HC_VECTOR_PIN_MUTATE):** Submits a guest memory page pointer to the hypervisor. The VMM locks this address inside the IOMMU hardware firewall and hooks it to the continuous namespace layout mutation loop.
 - **`0x03` (HC_VECTOR_VERIFY_PERIPH):** Triggers a real-time hardware status verification poll to validate peripheral input signal integrity.
-- **`0x04` (HC_VECTOR_GENERATE_TOKEN):** Directs the Ring -1 VMM to capture the localized environment metrics and generate a cryptographically sealed hardware token responding to a remote server challenge.
 
 ---
 
@@ -34,7 +33,6 @@ Include the master integration architecture into your project build configuratio
 ```cpp
 #include "src/common/enclave_integration.h"
 #include "src/common/enclave_hypercall.h"
-#include "src/common/enclave_network_attestation.h"
 ```
 
 ### Step 2: Environment Verification
@@ -95,8 +93,3 @@ To eliminate deterministic predictability and side-channel analysis vectors, the
 - **True Hardware Boot Entropy:** Employs the processor's physical hardware entropy engine (`RDRAND`) at system startup to generate a totally dynamic, non-repeating mutation seed (`g_DynamicMutationKey`). This seed randomizes address layouts completely anew on every single hardware boot cycle.
 - **Execute-Only Memory (XOM):** Leverages extended page tables (EPT/NPT) to map code segments with exclusive execution-only authorization, stripping away guest operating system read/write visibility.
 - **TLB Architectural Invalidation:** Issues explicit cache eviction sequences (`INVVPID`/`INVLPGA`) immediately preceding a guest OS switch context loop, erasing latent hardware translation artifacts and defeating side-channel timing profiling attacks.
-
----
-
-## 9. End-to-End Attested Network Transport Architecture
-To secure packet streams over public internet channels, the SDK provides a remote authentication protocol (`src/common/enclave_network_attestation.h`) paired with a server-side validation module (`src/server/server_network_validator.cpp`). When establishing network sessions, the remote server issues a 64-bit challenge nonce. The client architecture routes this challenge to Ring -1 to generate a cryptographically sealed token reflecting the hypervisor's active attestation state. The server evaluates this token prior to granting access, guaranteeing that only machines running under an un-tampered, verified shifting memory matrix can interface with the network layer.
