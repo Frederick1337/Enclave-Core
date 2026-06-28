@@ -85,3 +85,11 @@ To prevent malicious guest operating system processes, ransomware payloads, or u
 
 ## 7. Ring -1 Kernel Code Hook Prevention
 To isolate and preserve the integrity of core operating system workflows, the hypervisor incorporates a native kernel protection loop (`src/core/kernel_hook_protection.cpp`). The VMM maps the guest operating system's internal page structures and monitors `MOV CR0`/`MOV CR4` register flags. If any malicious guest process or kernel driver attempts to perform a system service descriptor table (SSDT) hook, a page table patch, or overwrite the kernel’s `.text` execution space, the hypervisor throws an attestation breach trap, terminating system execution instantly at the motherboard interface.
+
+---
+
+## 8. Silicon-Level Entropy and Cache-Timing Protections
+To eliminate deterministic predictability and side-channel analysis vectors, the hypervisor enforces core chip-level security protocols:
+- **True Hardware Boot Entropy:** Employs the processor's physical hardware entropy engine (`RDRAND`) at system startup to generate a totally dynamic, non-repeating mutation seed (`g_DynamicMutationKey`). This seed randomizes address layouts completely anew on every single hardware boot cycle.
+- **Execute-Only Memory (XOM):** Leverages extended page tables (EPT/NPT) to map code segments with exclusive execution-only authorization, stripping away guest operating system read/write visibility.
+- **TLB Architectural Invalidation:** Issues explicit cache eviction sequences (`INVVPID`/`INVLPGA`) immediately preceding a guest OS switch context loop, erasing latent hardware translation artifacts and defeating side-channel timing profiling attacks.

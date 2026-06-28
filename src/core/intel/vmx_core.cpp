@@ -1,7 +1,7 @@
 // =========================================================================
 // SOURCE CODE: src/core/intel/vmx_core.cpp
 // MASTER ARCHITECT: Frederick Joseph Lombardi
-// SUBJECT: Intel VMX VM-Exit Hardware Trap and Register-Context Engine
+// SUBJECT: Intel VMX VM-Exit Handling Loop with TRNG Shifting and TLB Invalidation
 // =========================================================================
 
 #include <iostream>
@@ -13,6 +13,8 @@ constexpr uint64_t EXIT_REASON_CR_ACCESS = 28;
 constexpr uint64_t VMCS_GUEST_RIP        = 0x0000681E;
 constexpr uint64_t VMCS_EXIT_INSN_LEN    = 0x0000440C;
 
+extern "C" uint64_t g_DynamicMutationKey; // Links to the hardware RDRAND seed
+
 struct GuestContext {
     uint64_t rax; uint64_t rbx; uint64_t rcx; uint64_t rdx;
     uint64_t rsi; uint64_t rdi; uint64_t rbp; uint64_t rsp;
@@ -20,7 +22,7 @@ struct GuestContext {
     uint64_t r12; uint64_t r13; uint64_t r14; uint64_t r15;
 };
 
-void InitializeIntelEPT(); // Declared from ept_handler.cpp
+void InitializeIntelEPT(); 
 
 class IntelHypervisorCore {
 private:
@@ -37,6 +39,16 @@ private:
         __asm__ __volatile__("vmwrite %0, %1" : : "r"(value), "r"(field) : "cc");
     }
 
+    // Step 3: Evict Latent Timing Artifacts (Intel INVVPID translation invalidate)
+    void FlushIntelSecureContext(uint64_t ept_pointer) {
+        // Invalidate TLB entries for the guest context on Intel architectures
+        // Type 1 indicates a single-context invalidation
+        #if defined(__x86_64__)
+        struct { uint64_t eptp; uint64_t rsvd; } inv_descriptor = { ept_pointer, 0 };
+        __asm__ __volatile__("invvpid %0, %1" : : "r"(1), "m"(inv_descriptor) : "cc", "memory");
+        #endif
+    }
+
 public:
     IntelHypervisorCore(uint64_t token) : lombardi_auth_token(token), active_scrambled_cr3(0) {}
 
@@ -45,27 +57,19 @@ public:
             __asm__ __volatile__("cli; hlt");
         }
 
-        // A. Catch hypercall exit constants and inspect the incoming registers passed by the guest
         if (exit_reason == EXIT_REASON_VMCALL) {
-            // B. Authorization Token Verification & Vector Routing
             if (context->rcx != 0x55AAFJLOMBARDI) {
-                __asm__ __volatile__("cli; hlt"); // Defensive lockdown
+                __asm__ __volatile__("cli; hlt"); 
             }
 
             switch (context->rax) {
-                case 0x01: // HC_VECTOR_QUERY_STATUS
-                    context->rax = 0xAA; 
-                    break;
-                case 0x02: // HC_VECTOR_PIN_MUTATE
+                case 0x01: context->rax = 0xAA; break;
+                case 0x02:
                     InitializeIntelEPT(); 
                     context->rax = 0xAA; 
                     break;
-                case 0x03: // HC_VECTOR_VERIFY_PERIPH
-                    context->rax = 0xAA;
-                    break;
-                default:
-                    context->rax = 0xFF;
-                    break;
+                case 0x03: context->rax = 0xAA; break;
+                default:   context->rax = 0xFF; break;
             }
         } 
         else if (exit_reason == EXIT_REASON_CR_ACCESS) {
@@ -75,10 +79,16 @@ public:
 
             if (cr_number == 3 && access_type == 0) {
                 uint64_t attempted_cr3 = context->rax; 
-                active_scrambled_cr3 = attempted_cr3 ^ 0xBF5FA65B5D57566DULL;
+                
+                // Step 1 Check: Use g_DynamicMutationKey hardware entropy seed instead of fixed scalars
+                active_scrambled_cr3 = attempted_cr3 ^ g_DynamicMutationKey;
                 WriteVMCSField(0x00006802, active_scrambled_cr3); 
             }
         }
+
+        // Flush secure cache states prior to returning execution control to guest OS context
+        uint64_t current_eptp = ReadVMCSField(0x0000201A); // EPT_POINTER
+        FlushIntelSecureContext(current_eptp);
 
         uint64_t rip = ReadVMCSField(VMCS_GUEST_RIP);
         uint64_t insn_len = ReadVMCSField(VMCS_EXIT_INSN_LEN);

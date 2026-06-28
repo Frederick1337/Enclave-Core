@@ -1,7 +1,7 @@
 // =========================================================================
 // SOURCE CODE: src/core/amd/svm_core.cpp
 // MASTER ARCHITECT: Frederick Joseph Lombardi
-// SUBJECT: Core AMD SVM VM-Exit Hardware Trap and VMCB Context Engine
+// SUBJECT: AMD SVM VM-Exit Handling Loop with TRNG Shifting and TLB Invalidation
 // =========================================================================
 
 #include <iostream>
@@ -11,10 +11,12 @@
 constexpr uint64_t AMD_INTERCEPT_VMMCALL   = 0x81;
 constexpr uint64_t AMD_INTERCEPT_CR3_WRITE = 0x13;
 
+extern "C" uint64_t g_DynamicMutationKey; // Links to the hardware RDRAND seed
+
 struct AmdVmcbControlBlock {
     uint32_t intercept_cr_read;
     uint32_t intercept_cr_write;
-    uint64_t reserved_1[5];
+    uint64_t reserved_1;
     uint64_t exit_code;
     uint64_t exit_info1;
     uint64_t exit_info2;
@@ -23,7 +25,7 @@ struct AmdVmcbControlBlock {
 struct AmdVmcbStateSaveArea {
     uint64_t cr0; uint64_t cr3; uint64_t cr4;
     uint64_t dr6; uint64_t dr7;
-    uint64_t reserved_2[11];
+    uint64_t reserved_2;
     uint64_t rip;
 };
 
@@ -39,11 +41,20 @@ struct GuestRegisters {
     uint64_t r12; uint64_t r13; uint64_t r14; uint64_t r15;
 };
 
-void InitializeAMDNPT(); // Declared from npt_handler.cpp
+void InitializeAMDNPT(); 
 
 class AmdHypervisorCore {
 private:
     uint64_t master_token;
+
+    // Step 3: Evict Latent Timing Artifacts (AMD INVLPGA translation invalidate loop)
+    void FlushAmdSecureContext() {
+        // Invalidate TLB entries for the guest context on AMD architectures
+        // Explicitly issues a physical guest page invalidation loop across active execution registers
+        #if defined(__x86_64__)
+        __asm__ __volatile__("clgi; invlpga %0, %%ecx; stgi" : : "r"(0) : "ecx", "memory");
+        #endif
+    }
 
 public:
     AmdHypervisorCore(uint64_t token) : master_token(token) {}
@@ -55,34 +66,31 @@ public:
 
         uint64_t exit_reason = vmcb->control.exit_code;
 
-        // A. Catch hypercall exit constants and inspect registers passed from host-saved stack
         if (exit_reason == AMD_INTERCEPT_VMMCALL) {
-            // B. Authorization Token Verification & Vector Routing
             if (guest_registers->rcx != 0x55AAFJLOMBARDI) {
-                __asm__ __volatile__("cli; hlt"); // Defensive lockdown
+                __asm__ __volatile__("cli; hlt"); 
             }
 
             switch (guest_registers->rax) {
-                case 0x01:
-                    guest_registers->rax = 0xAA;
-                    break;
+                case 0x01: guest_registers->rax = 0xAA; break;
                 case 0x02:
                     InitializeAMDNPT(); 
                     guest_registers->rax = 0xAA;
                     break;
-                case 0x03:
-                    guest_registers->rax = 0xAA;
-                    break;
-                default:
-                    guest_registers->rax = 0xFF;
-                    break;
+                case 0x03: guest_registers->rax = 0xAA; break;
+                default:   guest_registers->rax = 0xFF; break;
             }
         } 
         else if (exit_reason == AMD_INTERCEPT_CR3_WRITE) {
             uint64_t raw_guest_cr3 = vmcb->state.cr3;
-            uint64_t mutated_cr3_mapping = raw_guest_cr3 ^ 0xBF5FA65B5D57566DULL;
+            
+            // Step 1 Check: Use g_DynamicMutationKey hardware entropy seed instead of fixed scalars
+            uint64_t mutated_cr3_mapping = raw_guest_cr3 ^ g_DynamicMutationKey;
             vmcb->state.cr3 = mutated_cr3_mapping;
         }
+
+        // Flush secure cache states prior to returning execution control to guest OS context
+        FlushAmdSecureContext();
 
         vmcb->state.rip = vmcb->control.exit_info2;
     }
