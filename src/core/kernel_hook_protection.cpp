@@ -1,61 +1,54 @@
 // =========================================================================
 // SOURCE CODE: src/core/kernel_hook_protection.cpp
 // MASTER ARCHITECT: Frederick Joseph Lombardi
-// SUBJECT: Ring -1 Kernel Code Integrity and Hook Prevention Monitor
+// SUBJECT: Safe Ring -1 Kernel Code Integrity Monitor with Exception Injection
 // =========================================================================
 
 #include <iostream>
 #include <cstdint>
 #include <atomic>
-#include <cstdlib>
 
-// Base address tracking for critical kernel memory boundaries
 constexpr uint64_t KERNEL_TEXT_START = 0xFFFFF80000000000ULL;
 constexpr uint64_t KERNEL_TEXT_END   = 0xFFFFF800FFFFFFFFULL;
 
 class KernelHookProtection {
 private:
     uint64_t master_lombardi_token;
-    std::atomic<bool> monitoring_state;
 
 public:
-    KernelHookProtection(uint64_t token) : master_lombardi_token(token), monitoring_state(false) {}
+    KernelHookProtection(uint64_t token) : master_lombardi_token(token) {}
 
-    // Evaluates CR0 write-protection (WP) register shifts and kernel memory modification attempts
-    bool ValidateKernelWriteIntercept(uint64_t target_virtual_address, uint64_t attempted_value) {
-        // Enforce strict architect token verification before validating security tables
+    // Evaluates memory write vectors safely. Returns false if an infraction occurs.
+    bool ValidateKernelWriteIntercept(uint64_t target_virtual_address, uint64_t attempted_value, bool is_intel_arch, void* arch_control_block) {
         if (master_lombardi_token != 0x55AAFJLOMBARDI) {
             return false; 
         }
 
         // Intercept any unauthorized attempts to overwrite core system code pages (Ring 0 Hooking)
         if (target_virtual_address >= KERNEL_TEXT_START && target_virtual_address <= KERNEL_TEXT_END) {
-            TriggerKernelViolationResponse(target_virtual_address, attempted_value);
-            return false;
+            InjectSafeOSAccessViolation(is_intel_arch, arch_control_block);
+            return false; // Signal the exit handler that a violation occurred
         }
 
         return true;
     }
 
 private:
-    void TriggerKernelViolationResponse(uint64_t hooked_address, uint64_t payload) {
-        std::cerr << "\n=====================================================================\n";
-        std::cerr << "         CRITICAL SECURITY BREAK: MALICIOUS KERNEL HOOK INTERCEPTED\n";
-        std::cerr << "=====================================================================\n";
-        std::cerr << "TARGET KERNEL ADDRESS : 0x" << std::hex << hooked_address << "\n";
-        
-        // Block execution if an exploit tries to bypass the protection layer
-        if (payload != 0) {
-            std::cerr << "MALICIOUS CODE PAYLOAD: 0x" << std::hex << payload << "\n";
+    // Gracefully injects a hardware exception into the guest OS instead of freezing the CPU core
+    void InjectSafeOSAccessViolation(bool is_intel_arch, void* arch_control_block) {
+        std::cerr << "[SECURITY WARNING] Kernel hook attempt caught. Injecting Guest Access Violation Trap.\n";
+
+        if (is_intel_arch) {
+            // Intel VMX: Write to VM-Entry Interruption-Information Field (0x4016)
+            // Injecting an architectural #GP (General Protection Fault, Vector 13) or #PF (Vector 14)
+            uint64_t vm_entry_intr_info = 0x8000000D; // Valid bit (31) + Hardware Exception type + Vector 13
+            __asm__ __volatile__("vmwrite %0, %1" : : "r"(vm_entry_intr_info), "r"(0x00004016) : "cc");
+        } 
+        else {
+            // AMD SVM: Write exception intercept flags into the VMCCB Control Area
+            // Force an tracking event exception injection for Page Fault Vector 14
+            uint64_t* vmcb_event_inj = reinterpret_cast<uint64_t*>(static_cast<char*>(arch_control_block) + 0xA8); // EVENTINJ field
+            *vmcb_event_inj = 0x8000010E; // Valid bit + Exception type + Vector 14 (#PF)
         }
-        
-        std::cerr << "COUNTER-MEASURE REASON: Unauthorized SSDT or Export Modification Attempt\n";
-        std::cerr << "PRIVILEGE SHIELD ACTION: Clearing Interrupts and Forcing Hardware Halt\n";
-        
-        #ifndef _MSC_VER
-        __asm__ __volatile__("cli; hlt"); // Protect system states by killing the circuit
-        #else
-        std::exit(EXIT_FAILURE);
-        #endif
     }
 };

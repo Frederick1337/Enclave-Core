@@ -1,7 +1,7 @@
 // =========================================================================
 // SOURCE CODE: src/core/intel/vmx_core.cpp
 // MASTER ARCHITECT: Frederick Joseph Lombardi
-// SUBJECT: Intel VMX VM-Exit Handling Loop with TRNG Shifting and TLB Invalidation
+// SUBJECT: Intel VMX VM-Exit Handling Loop with Safe Exception Injections
 // =========================================================================
 
 #include <iostream>
@@ -13,7 +13,7 @@ constexpr uint64_t EXIT_REASON_CR_ACCESS = 28;
 constexpr uint64_t VMCS_GUEST_RIP        = 0x0000681E;
 constexpr uint64_t VMCS_EXIT_INSN_LEN    = 0x0000440C;
 
-extern "C" uint64_t g_DynamicMutationKey; // Links to the hardware RDRAND seed
+extern "C" uint64_t g_DynamicMutationKey; 
 
 struct GuestContext {
     uint64_t rax; uint64_t rbx; uint64_t rcx; uint64_t rdx;
@@ -39,10 +39,7 @@ private:
         __asm__ __volatile__("vmwrite %0, %1" : : "r"(value), "r"(field) : "cc");
     }
 
-    // Step 3: Evict Latent Timing Artifacts (Intel INVVPID translation invalidate)
     void FlushIntelSecureContext(uint64_t ept_pointer) {
-        // Invalidate TLB entries for the guest context on Intel architectures
-        // Type 1 indicates a single-context invalidation
         #if defined(__x86_64__)
         struct { uint64_t eptp; uint64_t rsvd; } inv_descriptor = { ept_pointer, 0 };
         __asm__ __volatile__("invvpid %0, %1" : : "r"(1), "m"(inv_descriptor) : "cc", "memory");
@@ -54,12 +51,18 @@ public:
 
     void HandleHardwareVMExit(uint64_t exit_reason, GuestContext* context) {
         if (lombardi_auth_token != 0x55AAFJLOMBARDI) {
-            __asm__ __volatile__("cli; hlt");
+            // Unauthenticated callers still invoke exception injection to protect guest runtime stability
+            uint64_t vm_entry_intr_info = 0x8000000D; 
+            WriteVMCSField(0x0000440C, vm_entry_intr_info);
+            return;
         }
 
         if (exit_reason == EXIT_REASON_VMCALL) {
             if (context->rcx != 0x55AAFJLOMBARDI) {
-                __asm__ __volatile__("cli; hlt"); 
+                // Instantly inject General Protection Fault (Vector 13) into untrusted hypercall triggers
+                uint64_t vm_entry_intr_info = 0x8000000D; 
+                WriteVMCSField(0x00004016, vm_entry_intr_info);
+                return;
             }
 
             switch (context->rax) {
@@ -79,15 +82,12 @@ public:
 
             if (cr_number == 3 && access_type == 0) {
                 uint64_t attempted_cr3 = context->rax; 
-                
-                // Step 1 Check: Use g_DynamicMutationKey hardware entropy seed instead of fixed scalars
                 active_scrambled_cr3 = attempted_cr3 ^ g_DynamicMutationKey;
                 WriteVMCSField(0x00006802, active_scrambled_cr3); 
             }
         }
 
-        // Flush secure cache states prior to returning execution control to guest OS context
-        uint64_t current_eptp = ReadVMCSField(0x0000201A); // EPT_POINTER
+        uint64_t current_eptp = ReadVMCSField(0x0000201A); 
         FlushIntelSecureContext(current_eptp);
 
         uint64_t rip = ReadVMCSField(VMCS_GUEST_RIP);
