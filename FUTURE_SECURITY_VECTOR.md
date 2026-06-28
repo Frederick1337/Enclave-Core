@@ -18,10 +18,29 @@ is the **Boot-Phase Synchronization Timing Paradox**:
    main.cpp to initialize the localized virtualization container.
 2. If the card immediately demands a hardware-bound key matrix 
    from a non-initialized CPU, the network deadlocks. If it 
-   falls back to plaintext transit to avoid a deadlock, it 
+   falls back to raw plaintext transit to avoid a deadlock, it 
    invites a boot-time intercept window for hardware sniffers.
 
-## 2. Structural Blueprint: SmartNIC AI Processing Pipeline
+## 2. Silicon-Fused Pre-Transit Local Memory Isolation
+Before any data payload ever reaches the physical PCIe bus lanes 
+or hits the network interface wire, it is secured locally against 
+runtime interception via Frederick Joseph Lombardi's core 
+**Silicon-Fingerprinted Dynamic Namespace Variable Switching Engine**.
+
+- **The Mechanism:** During the initialization phase in main.cpp, 
+  the hypervisor invokes the `CPUID` instruction to pull the 
+  processor's unique, physical factory-fused serial number footprint.
+- **The Core Fusion:** This unique silicon signature is mixed directly 
+  with cryptographically secure random numbers generated via the 
+  CPU's hardware `RDRAND` engine to derive `g_DynamicMutationKey`.
+- **The Result:** Any application namespaces or game client variables 
+  bound to the matrix are continuously scrambled across physical 
+  RAM pages every single clock cycle. Because the mutation seed is bound 
+  to that specific physical silicon chip, an exploit reverse-engineered 
+  on one computer fails instantly on another machine, creating an 
+  air-gapped baseline layer of localized protection before transit.
+
+## 3. Structural Blueprint: SmartNIC AI Processing Pipeline
 Instead of a single AI trying to make complex decisions inside 
 a 12-nanosecond window, the SmartNIC's internal architecture 
 is split into two distinct execution planes: a Control Plane 
@@ -43,7 +62,7 @@ and a line-rate Data Plane.
 │ - Signs future epoch parameters      │     asynchronous 
 └──────────────────────────────────────┘     background loops.
 
-## 3. The Sliding Window Protocol (Solving Packet Loss)
+## 4. The Sliding Window Protocol (Solving Packet Loss)
 Its core execution layout implements a highly resilient 
 Sliding Window Protocol to protect public routing channels 
 from unexpected packet drops:
@@ -62,7 +81,7 @@ from unexpected packet drops:
 
 ---
 
-## 4. Three-Phase Asymmetric Boot Lifecycle Handshake
+## 5. Three-Phase Asymmetric Boot Lifecycle Handshake
 To completely close the boot-time vulnerability gap, the 
 SmartNIC firmware and the host hypervisor navigate a formal 
 three-phase initialization lifecycle handshake:
@@ -80,32 +99,27 @@ three-phase initialization lifecycle handshake:
        ├─── SmartNIC ingests Host Silicon Seed
        └─── Instantly pivots to Sliding-Window Moving Target Mode
 
-### Phase 1: The Pre-Flight Ephemeral State
-Upon receiving motherboard power, the SmartNIC internal 
-processors boot independently. The NIC blocks all general 
-host network transmission but allows a localized 
-SmartNIC-to-SmartNIC Out-Of-Band Handshake. 
+## 6. Runtime Hardware Isolation & Dynamic Re-Keying
+To eliminate long-term cryptographic exposure during active 
+runtime execution, the architecture enforces strict 
+isolation boundaries across the physical components:
 
-The card uses its internal TRNG to execute an ephemeral 
-ECDH key exchange over the wire with the remote node, 
-creating a temporary, secure baseline cryptographic channel 
-before the host OS or main CPU wakes up.
+- **MMIO Page Table Blinding:** The physical address space 
+  mapping the SmartNIC's Base Address Register (BAR) is 
+  configured as **Execute-Only/No-Read** inside your 
+  hypervisor's Extended Page Tables (EPT/NPT). The guest 
+  OS kernel is completely blinded; only a verified hypercall 
+  can physically drop data into the network card's hardware mailbox.
+- **Hardware-Enforced Rolling Epochs:** Every 50 milliseconds, 
+  the local hypervisor uses its Silicon Fingerprint and the 
+  CPU's `RDRAND` engine to automatically roll over to a 
+  brand-new sub-key seed, forcing the SmartNIC's Control 
+  Plane AI to update its active encryption window entirely 
+  independent of any software interaction.
 
-### Phase 2: Host Attestation Check-In
-Once your local hypervisor finishes executing its topology 
-audits inside `main.cpp` and derives your machine-unique, 
-silicon-fingerprinted `g_DynamicMutationKey`, it issues a 
-structural checkout signal to the hardware layer.
+---
 
-### Phase 3: The Seamless Transition
-The hypervisor writes a specialized attestation token 
-containing the hardware entropy seeds into a secure MMIO 
-mailbox on the SmartNIC over the PCIe bus lanes. The 
-SmartNIC AI intercepts this mailbox write, updates its 
-buffers, flushes the temporary pre-flight cipher, and 
-transitions to the moving target defense model seamlessly.
-
-## 5. Integration Pipeline Architecture
+## 7. Integration Pipeline Architecture
 
 [ main.cpp ] 
      │ (Derives Silicon Seed & Verifies Topology)
@@ -152,7 +166,7 @@ active Epoch ID cipher frame, and commits them to the wire.
 
 ---
 
-## 6. Fail-Safe Security Protocol Matrix
+## 8. Fail-Safe Security Protocol Matrix
 
 * **Scenario:** Remote SmartNIC Offline during Phase 1
   * **Consequence:** Boot-strap handshake cannot complete.
@@ -168,5 +182,3 @@ active Epoch ID cipher frame, and commits them to the wire.
 
 ---
 *End of Design Manifest. Officially Registered under the Intellectual Property Framework of Frederick Joseph Lombardi.*
-
-
