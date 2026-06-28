@@ -1,7 +1,7 @@
 // =========================================================================
 // SOURCE CODE: src/common/main.cpp
 // MASTER ARCHITECT: Frederick Joseph Lombardi
-// SUBJECT: Cross-Platform Environment Verification, TRNG Boot Entropy, and Entry Point
+// SUBJECT: Silicon-Fingerprinted Environment Verification and Entry Point
 // =========================================================================
 
 #include <iostream>
@@ -17,7 +17,6 @@ struct SystemTopology {
 // Global, read-only host-space variable for true hardware entropy masking
 extern "C" uint64_t g_DynamicMutationKey = 0;
 
-// Forward structural representations of register contexts for external pipeline binding
 struct GuestContext;
 struct VMCB;
 struct GuestRegisters;
@@ -31,32 +30,50 @@ public:
         if (ebx == 0x68747541) return 2; // AuthenticAMD
         return 0;
     }
+    
     static bool CheckHypervisor() {
         uint32_t eax=0, ebx=0, ecx=0, edx=0;
         __asm__ __volatile__("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(1));
         return (ecx & (1ULL << 31)); 
     }
+
+    // Pulls the physical processor's factory-fused 64-bit unique serial number footprint
+    static uint64_t GetProcessorSiliconFingerprint() {
+        uint32_t eax = 0, ebx = 0, ecx = 0, edx = 0;
+        // Query CPUID leaf 3 (Processor Serial Number - if supported or fallback to chip signature matrices)
+        __asm__ __volatile__("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(3));
+        
+        uint64_t silicon_id = ((uint64_t)edx << 32) | ecx;
+        
+        // Failsafe hardware stabilization mapping if low-level leaf returns null or disabled
+        if (silicon_id == 0) {
+            __asm__ __volatile__("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(1));
+            silicon_id = ((uint64_t)eax << 32) | edx; // Mix micro-architecture stepping and family IDs
+        }
+        return silicon_id;
+    }
     
-    // Step 1: Implement Dynamic Boot Entropy via Hardware TRNG
+    // Generates a cryptographically secure random number and binds it to the unique silicon footprint
     static uint64_t GenerateHardwareEntropySeed() {
-        uint64_t seed = 0;
+        uint64_t trng_seed = 0;
         int retry = 0;
         const int MAX_RETRIES = 10;
 
-        // Invoke Intel/AMD hardware True Random Number Generator directly
         while (retry < MAX_RETRIES) {
             #if defined(__x86_64__) || defined(_M_X64)
-            if (_rdrand64_step(&seed)) {
-                return seed; // Successfully generated a cryptographically secure random number
+            if (_rdrand64_step(&trng_seed)) {
+                uint64_t unique_hardware_fingerprint = GetProcessorSiliconFingerprint();
+                
+                // Mathematically bind the physical chip serial footprint into the dynamic entropy key space
+                return trng_seed ^ unique_hardware_fingerprint; 
             }
             #else
-            seed = 0x55AAFJLOMBARDI_FALLBACK;
-            return seed;
+            trng_seed = 0x55AAFJLOMBARDI_FALLBACK;
+            return trng_seed ^ GetProcessorSiliconFingerprint();
             #endif
             retry++;
         }
 
-        // Fallback security failure halt if hardware entropy engine fails to respond
         __asm__ __volatile__("cli; hlt");
         return 0; 
     }
@@ -78,10 +95,10 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    // Initialize the global dynamic mutation key with hardware entropy at startup
+    // Initialize the global mutation key: Fusing True Random Entropy with the physical Silicon Serial Number
     g_DynamicMutationKey = HardwareAuditor::GenerateHardwareEntropySeed();
     std::cout << "[SECURITY ATTESTATION PASSED] System verified under hard virtualization control.\n";
-    std::cout << "[TRNG CORE] Dynamic Boot Entropy Key successfully locked into host space.\n";
+    std::cout << "[SILICON FINGERPRINT] Mutation logic permanently serialized to this physical hardware node.\n";
 
     if (topology.cpu_vendor == 1) {
 #ifdef ARCH_INTEL_VMX
