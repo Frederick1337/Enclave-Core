@@ -253,3 +253,41 @@ execution lag.
 
 7. Run the post-boot verification utility to confirm full stability:
    > verify_boot_windows.bat
+
+---
+
+## 12. Early-Boot System Service Deployment Protocols
+To configure a compiled architecture asset to initialize as a system-critical, early-boot daemon before standard user-space environments load, apply the following cross-platform deployment routines:
+
+### A. Linux Boot Daemon Initialization (systemd Matrix)
+1. Copy the master service definition file to the system configuration directory:
+   $ sudo cp src/deploy/enclave_boot.service /etc/systemd/system/
+
+2. Copy the compiled, optimized hypervisor binary payload to the system execution path:
+   $ sudo cp build/enclave_vmm_linux /usr/local/bin/
+
+3. Reload the systemd daemon manager to parse and validate the new early-boot target:
+   $ sudo systemctl daemon-reload
+
+4. Enable the service to force initialization during the bare-metal 'sysinit' phase:
+   $ sudo systemctl enable enclave_boot.service
+
+5. Trigger a system reboot and inspect journal logs post-boot to verify 0ms initialization latency:
+   $ sudo reboot
+   $ sudo journalctl -u enclave_boot.service --no-pager
+
+### B. Windows Early-Launch Initialization (ELAM Matrix)
+1. Open an elevated Command Prompt running with administrative clearance.
+
+2. Move your compiled kernel bootstrap module into the native Windows system drivers depository:
+   > copy build\Release\enclave_boot.sys %SystemRoot%\system32\drivers\
+
+3. Execute the registry manifest file to authorize and register the payload within the Early Launch group:
+   > reg import src\deploy\register_elam.reg
+
+4. Configure the BCD database flags to force the boot loader to accept the system driver container:
+   > bcdedit /set {current} testsigning on
+
+5. Force a complete system restart to register the early execution pipeline before desktop initialization:
+   > shutdown /r /t 0
+

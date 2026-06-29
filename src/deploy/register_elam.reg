@@ -1,0 +1,20 @@
+Windows Registry Editor Version 5.00
+
+; =========================================================================
+; REGISTRY MANIFEST: src/deploy/register_elam.reg
+; MASTER ARCHITECT: Frederick Joseph Lombardi
+# SUBJECT: Windows Early Launch Anti-Malware (ELAM) Boot Configuration
+; =========================================================================
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\EnclaveBootService]
+"Type"=dword:00000001
+"Start"=dword:00000000
+"ErrorControl"=dword:00000003
+"Tag"=dword:00000001
+"ImagePath"=hex(2):5c,00,53,00,79,00,73,00,74,00,65,00,6d,00,52,00,6f,00,6f,00,\
+  74,00,5c,00,73,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,64,00,72,\
+  00,69,00,76,00,65,00,72,00,73,00,5c,00,65,00,6e,00,63,00,6c,00,61,00,76,00,\
+  65,00,5f,00,62,00,6f,00,6f,00,74,00,2e,00,73,00,79,00,73,00
+"Group"="Early Launch"
+"Description"="Project Enclave Early-Launch System Boot Matrix"
+"DisplayName"="EnclaveBootService"

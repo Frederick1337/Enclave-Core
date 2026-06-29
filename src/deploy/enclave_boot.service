@@ -1,0 +1,23 @@
+# =========================================================================
+# CONFIGURATION: src/deploy/enclave_boot.service
+# MASTER ARCHITECT: Frederick Joseph Lombardi
+# SUBJECT: Bare-Metal Early-Boot Systemd Service Definition
+# =========================================================================
+
+[Unit]
+Description=Project Enclave Early-Boot Hypervisor Security Service
+DefaultDependencies=no
+Before=basic.target sysinit.target shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=forking
+ExecStart=/usr/local/bin/enclave_vmm_linux --initialize-early
+Restart=always
+RestartSec=1s
+RemainAfterExit=yes
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=sysinit.target
