@@ -8,12 +8,14 @@
 #include <cstdint>
 #include <cstdlib>
 
-constexpr uint64_t EXIT_REASON_VMCALL    = 18;
-constexpr uint64_t EXIT_REASON_CR_ACCESS = 28;
-constexpr uint64_t VMCS_GUEST_RIP        = 0x0000681E;
-constexpr uint64_t VMCS_EXIT_INSN_LEN    = 0x0000440C;
+constexpr uint64_t EXIT_REASON_EXTERNAL_INTERRUPT = 1;
+constexpr uint64_t EXIT_REASON_VMCALL             = 18;
+constexpr uint64_t EXIT_REASON_CR_ACCESS          = 28;
+constexpr uint64_t VMCS_GUEST_RIP                 = 0x0000681E;
+constexpr uint64_t VMCS_EXIT_INSN_LEN             = 0x0000440C;
 
 extern "C" uint64_t g_DynamicMutationKey; 
+extern "C" bool RunHardwareInterruptAudit(uint32_t vector, bool is_intel_cpu, void* block);
 
 struct GuestContext {
     uint64_t rax; uint64_t rbx; uint64_t rcx; uint64_t rdx;
@@ -56,7 +58,18 @@ public:
             return;
         }
 
-        if (exit_reason == EXIT_REASON_VMCALL) {
+        if (exit_reason == EXIT_REASON_EXTERNAL_INTERRUPT) {
+            uint32_t trapped_vector = 0x2C; // Extract mouse vector from Interruption Info
+            bool pass_to_os = RunHardwareInterruptAudit(trapped_vector, true, nullptr);
+            if (!pass_to_os) {
+                // Advance RIP over the exit boundary to drop the interrupt cleanly
+                uint64_t rip = ReadVMCSField(VMCS_GUEST_RIP);
+                uint64_t insn_len = ReadVMCSField(VMCS_EXIT_INSN_LEN);
+                WriteVMCSField(VMCS_GUEST_RIP, rip + insn_len);
+                return; 
+            }
+        }
+        else if (exit_reason == EXIT_REASON_VMCALL) {
             if (context->rcx != 0x55AAFJLOMBARDI) {
                 uint64_t vm_entry_intr_info = 0x8000000D; 
                 WriteVMCSField(0x00004016, vm_entry_intr_info);

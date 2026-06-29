@@ -29,6 +29,7 @@ set(SHARED_SOURCES
     src/core/fuzz_protection_engine.cpp
     src/core/encrypted_logger.cpp
     src/core/kernel_hook_protection.cpp
+    src/core/interrupt_filter_engine.cpp
 )
 
 set(ASM_SOURCES src/boot/bootloader.asm)

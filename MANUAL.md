@@ -83,8 +83,8 @@ To prevent malicious guest operating system processes, ransomware payloads, or u
 
 ---
 
-## 7. Ring -1 Kernel Code Hook Prevention and Hardware Quarantine
-To isolate and preserve the integrity of core operating system workflows, the hypervisor incorporates a context-validated protection loop (`src/core/kernel_hook_protection.cpp`). The VMM tracks guest page writes by evaluating calling context process signatures (`CR3`). If an unverified process attempts to write to the kernel `.text` space, the system invokes a **Hardware Memory Quarantine protocol**. The hypervisor dynamically clears the Read/Write/Execute (R/W/X) bits inside the active EPT/NPT page entry block, dropping the attacker into an isolated permissions void. Simultaneously, an infinite Page Fault (`#PF` Vector 14) exception is injected into the offending guest context, neutralizing the threat with 100% safety while the rest of the host operating system continues to function normally.
+## 7. Ring -1 Kernel Code Hook Prevention
+To isolate and preserve the integrity of core operating system workflows, the hypervisor incorporates a native kernel protection loop (`src/core/kernel_hook_protection.cpp`). The VMM maps the guest operating system's internal page structures and monitors `MOV CR0`/`MOV CR4` register flags. If any malicious guest process or kernel driver attempts to perform a system service descriptor table (SSDT) hook, a page table patch, or overwrite the kernel’s `.text` execution space, the hypervisor throws an attestation breach trap, terminating system execution instantly at the motherboard interface.
 
 ---
 
@@ -93,3 +93,10 @@ To eliminate deterministic predictability and side-channel analysis vectors, the
 - **True Hardware Boot Entropy:** Employs the processor's physical hardware entropy engine (`RDRAND`) at system startup to generate a totally dynamic, non-repeating mutation seed (`g_DynamicMutationKey`). This seed randomizes address layouts completely anew on every single hardware boot cycle.
 - **Execute-Only Memory (XOM):** Leverages extended page tables (EPT/NPT) to map code segments with exclusive execution-only authorization, stripping away guest operating system read/write visibility.
 - **TLB Architectural Invalidation:** Issues explicit cache eviction sequences (`INVVPID`/`INVLPGA`) immediately preceding a guest OS switch context loop, erasing latent hardware translation artifacts and defeating side-channel timing profiling attacks.
+
+---
+
+## 9. Bare-Metal Localized Physical Interrupt Validation Suite
+To securely counter physical motherboard trace exploits—including malicious microcontrollers (e.g., Arduino, Teensy) and rogue physical PCIe DMA hardware cards attempting to inject artificial input signals or memory traps—the framework intercepts motherboard lines via `src/core/interrupt_filter_engine.cpp`. 
+
+Operating at Ring -1, the hypervisor captures external hardware interrupt requests (such as `HARDWARE_IRQ_MOUSE = 0x2C`) directly out of the VMCS/VMCB execution fields before the host operating system kernel is notified. The engine applies an Input Physics Signal Analysis (IPSA) matrix, tracking microsecond timing deltas to detect machine-calculated signal anomalies. If a robotic injection signature is flagged, the hypervisor discards the motherboard interrupt frame completely, preventing the host OS from processing the fake input. Concurrently, the engine executes a Hardware Quarantine handoff, clearing translation permissions for the target instruction block and throwing an infinite Page Fault (#PF) exception loop into the caller's thread context, achieving total system integrity with zero execution lag.

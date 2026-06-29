@@ -8,10 +8,12 @@
 #include <cstdint>
 #include <cstdlib>
 
+constexpr uint64_t AMD_INTERCEPT_INTR      = 0x60;
 constexpr uint64_t AMD_INTERCEPT_VMMCALL   = 0x81;
 constexpr uint64_t AMD_INTERCEPT_CR3_WRITE = 0x13;
 
 extern "C" uint64_t g_DynamicMutationKey; 
+extern "C" bool RunHardwareInterruptAudit(uint32_t vector, bool is_intel_cpu, void* block);
 
 struct AmdVmcbControlBlock {
     uint32_t intercept_cr_read;
@@ -66,7 +68,17 @@ public:
 
         uint64_t exit_reason = vmcb->control.exit_code;
 
-        if (exit_reason == AMD_INTERCEPT_VMMCALL) {
+        if (exit_reason == AMD_INTERCEPT_INTR) {
+            uint32_t trapped_vector = 0x2C; 
+            bool pass_to_os = RunHardwareInterruptAudit(trapped_vector, false, vmcb);
+            if (!pass_to_os) {
+                // Drop interrupt and advance RIP past intercept block
+                FlushAmdSecureContext();
+                vmcb->state.rip = vmcb->control.exit_info2;
+                return; 
+            }
+        }
+        else if (exit_reason == AMD_INTERCEPT_VMMCALL) {
             if (guest_registers->rcx != 0x55AAFJLOMBARDI) {
                 vmcb->control.event_inj = 0x8000010E; 
                 return;
