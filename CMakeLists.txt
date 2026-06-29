@@ -30,6 +30,7 @@ set(SHARED_SOURCES
     src/core/encrypted_logger.cpp
     src/core/kernel_hook_protection.cpp
     src/core/interrupt_filter_engine.cpp
+    src/core/hardware_diagnostic_pipeline.cpp
 )
 
 set(ASM_SOURCES src/boot/bootloader.asm)
