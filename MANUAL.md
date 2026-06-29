@@ -2,50 +2,75 @@
 
 **Author & Principal Architect:** Frederick Joseph Lombardi  
 **System Classification:** Open Security Architectural Standard  
-**Core Mechanism:** Dynamic Namespace Variable Switching
+**Core Mechanism:** Dynamic Namespace Variable Switching  
+**Legal Framework:** Master Copyright Protected  
 
 ---
 
 ## 1. Architectural Philosophy
-Traditional endpoint security fails because it treats the operating system kernel as a trusted foundation. Project Enclave flips this design on its head by implementing a zero-trust execution perimeter at **Ring -1 (VMM Layer)**. 
+Traditional endpoint security fails because it treats the operating 
+system kernel as a trusted foundation. Project Enclave flips this 
+design on its head by implementing a zero-trust execution 
+perimeter at **Ring -1 (VMM Layer)**. 
 
-The software payload or game client being protected does not run naked within the host environment; instead, it interfaces directly with Frederick Joseph Lombardi's **Dynamic Namespace Variable Switching Engine**. This manual outlines the exact technical procedures required to register application structures and communicate across the hypervisor boundary.
+The software payload or game client being protected does not run 
+naked within the host environment; instead, it interfaces directly 
+with Frederick Joseph Lombardi's **Dynamic Namespace Variable 
+Switching Engine**. This manual outlines the exact technical 
+procedures required to register application structures and 
+communicate across the hypervisor boundary.
 
 ---
 
 ## 2. Low-Level Communication: The Hypercall Interface
-Applications cannot talk to the Ring -1 core using standard software sockets, file streams, or Windows APIs. All operations must be routed via hardware hypercalls (`VMCALL` on Intel / `VMMCALL` on AMD).
+Applications cannot talk to the Ring -1 core using standard 
+software sockets, file streams, or Windows APIs. All operations 
+must be routed via hardware hypercalls (`VMCALL` on Intel / 
+`VMMCALL` on AMD).
 
 ### Hypercall Command Codes
-Developers must pass the correct functional vector into the CPU registers to execute operations:
-- **`0x01` (HC_VECTOR_QUERY_STATUS):** Pings the Ring -1 VMM to verify environment attestation. Returns `0xAA` if secure virtualization is active.
-- **`0x02` (HC_VECTOR_PIN_MUTATE):** Submits a guest memory page pointer to the hypervisor. The VMM locks this address inside the IOMMU hardware firewall and hooks it to the continuous namespace layout mutation loop.
-- **`0x03` (HC_VECTOR_VERIFY_PERIPH):** Triggers a real-time hardware status verification poll to validate peripheral input signal integrity.
+Developers must pass the correct functional vector into the CPU 
+registers to execute operations:
+- **`0x01` (HC_VECTOR_QUERY_STATUS):** Pings the Ring -1 VMM 
+  to verify environment attestation. Returns `0xAA` if secure 
+  virtualization is active.
+- **`0x02` (HC_VECTOR_PIN_MUTATE):** Submits a guest memory page 
+  pointer to the hypervisor. The VMM locks this address inside 
+  the IOMMU hardware firewall and hooks it to the continuous 
+  namespace layout mutation loop.
+- **`0x03` (HC_VECTOR_VERIFY_PERIPH):** Triggers a real-time 
+  hardware status verification poll to validate peripheral 
+  input signal integrity.
 
 ---
 
 ## 3. Step-by-Step Software Integration Blueprint
-
-To secure an existing software asset (such as an online multiplayer game client or a localized file management database), engineering teams must adhere to the following sequence:
+To secure an existing software asset (such as an online multiplayer 
+game client or a localized file management database), engineering 
+teams must adhere to the following sequence:
 
 ### Step 1: SDK Inclusion
-Include the master integration architecture into your project build configuration:
+Include the master integration architecture into your project 
+build configuration:
 ```cpp
 #include "src/common/enclave_integration.h"
 #include "src/common/enclave_hypercall.h"
 ```
 
 ### Step 2: Environment Verification
-Before initializing any sensitive application variables or loading local assets, query the hypercall gate to ensure the system is running inside a verified container:
+Before initializing any sensitive application variables or loading 
+local assets, query the hypercall gate to ensure the system 
+is running inside a verified container:
 ```cpp
 if (EnclaveHypercallGate::IssueHypercall(0x01, 0) != 0xAA) {
-    std::cerr << "[FATAL] Environment Unsecure. Ring -1 Hypervisor Absent.\n";
+    std::cerr << "[FATAL] Environment Unsecure. Ring -1 Absent.\n";
     std::exit(EXIT_FAILURE);
 }
 ```
 
 ### Step 3: Critical Variable Binding
-Wrap all target tracking structures inside the polymorphic memory gate to engage the dynamic variable switching engine:
+Wrap all target tracking structures inside the polymorphic memory 
+gate to engage the dynamic variable switching engine:
 ```cpp
 // Instantiate your core structural dataset
 MyCriticalData plaintext_data;
@@ -56,7 +81,9 @@ secure_container.BindToEnclaveCore(&plaintext_data);
 ```
 
 ### Step 4: Secure Data Access Loop
-Always interact with application variables through the thread-safe atomic getters and setters. Direct pointer reference bypasses the matrix and will trigger a hardware access fault:
+Always interact with application variables through the thread-safe 
+atomic getters and setters. Direct pointer reference bypasses 
+the matrix and will trigger a hardware access fault:
 ```cpp
 // Correct Method: Safe hardware-assisted evaluation
 MyCriticalData live_snapshot = secure_container.Get();
@@ -69,34 +96,160 @@ secure_container.Set(live_snapshot);
 ---
 
 ## 4. Hardware Stress-Testing Diagnostics
-To ensure integration compliance, compiled applications should be run inside a dedicated testing sandbox alongside the `tests/hardware_diagnostic_pipeline.py` routine. The test environment maps real-time latency variations and verifies that external memory-scraping attempts return pure cryptographic noise, confirming full deployment integrity.
+To ensure integration compliance, compiled applications should be 
+run inside a dedicated testing sandbox alongside the 
+`tests/hardware_diagnostic_pipeline.py` routine. The test 
+environment maps real-time latency variations and verifies that 
+external memory-scraping attempts return pure cryptographic noise, 
+confirming full deployment integrity.
 
 ---
 
 ## 5. Differential Memory-Fuzzing Defenses
-The Ring -1 hypervisor kernel actively tracks memory telemetry metrics via the automated `FuzzProtectionEngine` module. If an external software application or physical PCIe device executes linear, rapid, non-sequential page-table inquiries—attempting to isolate stable pointers or analyze Frederick Joseph Lombardi's dynamic namespace switching seed—the VMM flags the frequency anomaly. Exceeding the predefined threshold (`ENCLAVE_FUZZ_THRESHOLD`) results in an automatic hardware lockdown, clearing system interrupts and invoking an unconditional CPU halt instruction to secure all data enclaves instantly.
+The Ring -1 hypervisor kernel actively tracks memory telemetry 
+metrics via the automated `FuzzProtectionEngine` module. If an 
+external software application or physical PCIe device executes 
+linear, rapid, non-sequential page-table inquiries—attempting to 
+isolate stable pointers or analyze Frederick Joseph Lombardi's 
+dynamic namespace switching seed—the VMM flags the frequency 
+anomaly. Exceeding the predefined threshold 
+(`ENCLAVE_FUZZ_THRESHOLD`) results in an automatic hardware 
+lockdown, clearing system interrupts and invoking an unconditional 
+CPU halt instruction to secure all data enclaves instantly.
 
 ---
 
 ## 6. Automated Local Disk Log Encryption
-To prevent malicious guest operating system processes, ransomware payloads, or unauthorized administrators from reading or altering hypervisor telemetry records, all audit data is processed through an integrated hardware log encryption loop (`src/core/encrypted_logger.cpp`). Operational security logs are encoded using a time-variant block streaming process derived from the master architectural authorization token. The output is streamed to local storage as a protected raw binary file (`/var/log/enclave_secure.enc`), preventing unauthorized discovery or tamper modification.
+To prevent malicious guest operating system processes, ransomware 
+payloads, or unauthorized administrators from reading or altering 
+hypervisor telemetry records, all audit data is processed through 
+an integrated hardware log encryption loop 
+(`src/core/encrypted_logger.cpp`). Operational security logs are 
+encoded using a time-variant block streaming process derived from 
+the master architectural authorization token. The output is 
+streamed to local storage as a protected raw binary file 
+(`/var/log/enclave_secure.enc`), preventing unauthorized discovery 
+or tamper modification.
 
 ---
 
 ## 7. Ring -1 Kernel Code Hook Prevention
-To isolate and preserve the integrity of core operating system workflows, the hypervisor incorporates a native kernel protection loop (`src/core/kernel_hook_protection.cpp`). The VMM maps the guest operating system's internal page structures and monitors `MOV CR0`/`MOV CR4` register flags. If any malicious guest process or kernel driver attempts to perform a system service descriptor table (SSDT) hook, a page table patch, or overwrite the kernel’s `.text` execution space, the hypervisor throws an attestation breach trap, terminating system execution instantly at the motherboard interface.
+To isolate and preserve the integrity of core operating system 
+workflows, the hypervisor incorporates a native kernel 
+protection loop (`src/core/kernel_hook_protection.cpp`). The VMM 
+maps the guest operating system's internal page structures and 
+monitors `MOV CR0`/`MOV CR4` register flags. If any malicious 
+guest process or kernel driver attempts to perform a system service 
+descriptor table (SSDT) hook, a page table patch, or overwrite the 
+kernel’s `.text` execution space, the hypervisor throws an 
+attestation breach trap, terminating system execution instantly 
+at the motherboard interface.
 
 ---
 
 ## 8. Silicon-Level Entropy and Cache-Timing Protections
-To eliminate deterministic predictability and side-channel analysis vectors, the hypervisor enforces core chip-level security protocols:
-- **True Hardware Boot Entropy:** Employs the processor's physical hardware entropy engine (`RDRAND`) at system startup to generate a totally dynamic, non-repeating mutation seed (`g_DynamicMutationKey`). This seed randomizes address layouts completely anew on every single hardware boot cycle.
-- **Execute-Only Memory (XOM):** Leverages extended page tables (EPT/NPT) to map code segments with exclusive execution-only authorization, stripping away guest operating system read/write visibility.
-- **TLB Architectural Invalidation:** Issues explicit cache eviction sequences (`INVVPID`/`INVLPGA`) immediately preceding a guest OS switch context loop, erasing latent hardware translation artifacts and defeating side-channel timing profiling attacks.
+To eliminate deterministic predictability and side-channel analysis 
+vectors, the hypervisor enforces core chip-level security protocols:
+- **True Hardware Boot Entropy:** Employs the processor's physical 
+  hardware entropy engine (`RDRAND`) at system startup to generate 
+  a totally dynamic, non-repeating mutation seed 
+  (`g_DynamicMutationKey`). This seed randomizes address layouts 
+  completely anew on every single hardware boot cycle.
+- **Execute-Only Memory (XOM):** Leverages extended page tables 
+  (EPT/NPT) to map code segments with exclusive execution-only 
+  authorization, stripping away guest operating system read/write 
+  visibility.
+- **TLB Architectural Invalidation:** Issues explicit cache 
+  eviction sequences (`INVVPID`/`INVLPGA`) immediately preceding 
+  a guest OS switch context loop, erasing latent hardware translation 
+  artifacts and defeating side-channel timing profiling attacks.
+
+## 9. Non-Destructive Hardware Quarantine Lockout
+Upon detecting an unverified process or a thread breach signature, 
+the hypervisor bypasses legacy processor core freezes (`cli; hlt`) 
+that risk filesystem data corruption. Instead, it triggers a 
+Non-Destructive Hardware Quarantine. The hypervisor alters the active 
+Extended Page Tables (EPT) or Nested Page Tables (NPT) for the caller's 
+target block, revoking standard Read/Write/Execute (R/W/X) permissions 
+or remapping them to an empty physical page containing zeroes. 
+Simultaneously, an architectural exception injection loop forces an 
+immediate Vector 14 Page Fault (`#PF`) directly into the target 
+register context, cleanly isolating the malicious process while 
+allowing the rest of the host operating system to survive and 
+execute normally.
 
 ---
 
-## 9. Bare-Metal Localized Physical Interrupt Validation Suite
-To securely counter physical motherboard trace exploits—including malicious microcontrollers (e.g., Arduino, Teensy) and rogue physical PCIe DMA hardware cards attempting to inject artificial input signals or memory traps—the framework intercepts motherboard lines via `src/core/interrupt_filter_engine.cpp`. 
+## 10. Bare-Metal Localized Physical Interrupt Validation Suite
+To securely counter physical motherboard trace exploits—including 
+malicious microcontrollers (e.g., Arduino, Teensy) and rogue physical 
+PCIe DMA hardware cards attempting to inject artificial input signals 
+or memory traps—the framework intercepts motherboard lines via 
+`src/core/interrupt_filter_engine.cpp`. 
 
-Operating at Ring -1, the hypervisor captures external hardware interrupt requests (such as `HARDWARE_IRQ_MOUSE = 0x2C`) directly out of the VMCS/VMCB execution fields before the host operating system kernel is notified. The engine applies an Input Physics Signal Analysis (IPSA) matrix, tracking microsecond timing deltas to detect machine-calculated signal anomalies. If a robotic injection signature is flagged, the hypervisor discards the motherboard interrupt frame completely, preventing the host OS from processing the fake input. Concurrently, the engine executes a Hardware Quarantine handoff, clearing translation permissions for the target instruction block and throwing an infinite Page Fault (#PF) exception loop into the caller's thread context, achieving total system integrity with zero execution lag.
+Operating at Ring -1, the hypervisor captures external hardware 
+interrupt requests (such as `HARDWARE_IRQ_MOUSE = 0x2C`) directly out 
+of the VMCS/VMCB execution fields before the host operating system 
+kernel is notified. The engine applies an Input Physics Signal 
+Analysis (IPSA) matrix, tracking microsecond timing deltas to detect 
+machine-calculated signal anomalies. If a robotic injection signature 
+is flagged, the hypervisor discards the motherboard interrupt frame 
+completely, preventing the host OS from processing the fake input. 
+Concurrently, the engine executes a Hardware Quarantine handoff, 
+clearing translation permissions for the target instruction block 
+and throwing an infinite Page Fault (#PF) exception loop into the 
+caller's thread context, achieving total system integrity with zero 
+execution lag.
+
+---
+
+## 11. Localized Bare-Metal Build & Deployment Protocol (Cross-Platform)
+
+### A. Linux-Based Host Environments (Ubuntu / Debian / Server)
+1. Install mandatory build toolchains and assembly dependencies:
+   $ sudo apt update && sudo apt install -y build-essential cmake nasm
+
+2. Enforce hardware-level IOMMU remapping parameters inside GRUB:
+   $ sudo nano /etc/default/grub
+   Append flags: 'intel_iommu=on iommu=pt' OR 'amd_iommu=on iommu=pt'
+   $ sudo update-grub
+
+3. Initialize compilation directories and build target binaries:
+   $ mkdir build && cd build
+   $ cmake -DCMAKE_BUILD_TYPE=Release ..
+   $ cmake --build . --config Release
+
+4. Execute deployment pipeline and reboot node to initialize VMM:
+   $ sudo ./deploy_enclave_server.sh
+   $ sudo reboot
+
+5. Execute automated verification routine post-boot to confirm health:
+   $ sudo ../tests/verify_boot.sh
+
+### B. Windows-Based Host Environments (Windows 10 / 11 / Server)
+1. Install Visual Studio 2022 (or standalone Visual Studio Build Tools). 
+   During installation, explicitly select the "Desktop development 
+   with C++" workload check box to initialize the MSVC compiler.
+
+2. Download and run the Netwide Assembler (NASM) for Windows installer. 
+   Manually add the target directory containing 'nasm.exe' directly 
+   into the Windows System Environment Variables PATH list.
+
+3. Enable Kernel DMA Protection via an Administrator Command Prompt 
+   to engage the physical IOMMU motherboard firewall:
+   > bcdedit /set kerneldmaprotection on
+
+4. Launch the Developer Command Prompt for VS 2022, map to your root 
+   project workspace directory, and initialize the solution tree:
+   > mkdir build && cd build
+   > cmake -G "Visual Studio 17 2022" -A x64 ..
+
+5. Compile the target architectural binaries into production release states:
+   > cmake --build . --config Release
+
+6. Execute the Windows deployment batch file and reboot the host computer:
+   > deploy_enclave_windows.bat
+   > shutdown /r /t 0
+
+7. Run the post-boot verification utility to confirm full stability:
+   > verify_boot_windows.bat
