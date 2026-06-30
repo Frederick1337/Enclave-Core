@@ -206,8 +206,8 @@ execution lag.
 ## 11. Localized Bare-Metal Build & Deployment Protocol (Cross-Platform)
 
 ### A. Linux-Based Host Environments (Ubuntu / Debian / Server)
-1. Install mandatory build toolchains and assembly dependencies:
-   $ sudo apt update && sudo apt install -y build-essential cmake nasm
+1. Install mandatory build toolchains, kernel headers, and assembly dependencies:
+   $ sudo apt update && sudo apt install -y build-essential cmake nasm linux-headers-$(uname -r)
 
 2. Enforce hardware-level IOMMU remapping parameters inside GRUB:
    $ sudo nano /etc/default/grub
@@ -219,32 +219,31 @@ execution lag.
    $ cmake -DCMAKE_BUILD_TYPE=Release ..
    $ cmake --build . --config Release
 
-4. Execute deployment pipeline and reboot node to initialize VMM:
+4. Load the compiled hypervisor kernel module (.ko) directly into physical CPU memory:
+   $ sudo insmod enclave_vmm_intel.ko  # For Intel Systems
+   $ sudo insmod enclave_vmm_amd.ko    # For AMD Systems
+
+5. Execute deployment pipeline and reboot node to initialize Ring -1 VMM containment:
    $ sudo ./deploy_enclave_server.sh
    $ sudo reboot
 
-5. Execute automated verification routine post-boot to confirm health:
+6. Execute automated verification routine post-boot to confirm health:
    $ sudo ../tests/verify_boot.sh
 
 ### B. Windows-Based Host Environments (Windows 10 / 11 / Server)
-1. Install Visual Studio 2022 (or standalone Visual Studio Build Tools). 
-   During installation, explicitly select the "Desktop development 
-   with C++" workload check box to initialize the MSVC compiler.
+1. Install Visual Studio 2022 (or standalone Visual Studio Build Tools). During installation, explicitly select the "Desktop development with C++" workload check box and the "Windows Driver Kit (WDK)" to initialize the MSVC compiler and kernel driver build paths.
 
-2. Download and run the Netwide Assembler (NASM) for Windows installer. 
-   Manually add the target directory containing 'nasm.exe' directly 
-   into the Windows System Environment Variables PATH list.
+2. Download and run the Netwide Assembler (NASM) for Windows installer. Manually add the target directory containing 'nasm.exe' directly into the Windows System Environment Variables PATH list.
 
-3. Enable Kernel DMA Protection via an Administrator Command Prompt 
-   to engage the physical IOMMU motherboard firewall:
+3. Enable Test-Signing mode and Kernel DMA Protection via an Administrator Command Prompt to allow unsigned kernel modules and engage the physical IOMMU motherboard firewall:
+   > bcdedit /set testsigning on
    > bcdedit /set kerneldmaprotection on
 
-4. Launch the Developer Command Prompt for VS 2022, map to your root 
-   project workspace directory, and initialize the solution tree:
+4. Launch the Developer Command Prompt for VS 2022, map to your root project workspace directory, and initialize the solution tree:
    > mkdir build && cd build
    > cmake -G "Visual Studio 17 2022" -A x64 ..
 
-5. Compile the target architectural binaries into production release states:
+5. Compile the target architectural binaries into production driver release states (.sys):
    > cmake --build . --config Release
 
 6. Execute the Windows deployment batch file and reboot the host computer:

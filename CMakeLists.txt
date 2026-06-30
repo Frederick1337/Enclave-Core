@@ -31,6 +31,8 @@ set(SHARED_SOURCES
     src/core/kernel_hook_protection.cpp
     src/core/interrupt_filter_engine.cpp
     src/core/hardware_diagnostic_pipeline.cpp
+    src/boot/linux_module_wrapper.c
+    src/boot/windows_driver_wrapper.c
 )
 
 set(ASM_SOURCES src/boot/bootloader.asm)
