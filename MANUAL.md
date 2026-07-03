@@ -207,28 +207,28 @@ execution lag.
 
 ### A. Linux-Based Host Environments (Ubuntu / Debian / Server)
 1. Install mandatory build toolchains, kernel headers, and assembly dependencies:
-   $ sudo apt update && sudo apt install -y build-essential cmake nasm linux-headers-$(uname -r)
+   > sudo apt update && sudo apt install -y build-essential cmake nasm linux-headers-$(uname -r)
 
 2. Enforce hardware-level IOMMU remapping parameters inside GRUB:
-   $ sudo nano /etc/default/grub
+   > sudo nano /etc/default/grub
    Append flags: 'intel_iommu=on iommu=pt' OR 'amd_iommu=on iommu=pt'
-   $ sudo update-grub
+   > sudo update-grub
 
 3. Initialize compilation directories and build target binaries:
-   $ mkdir build && cd build
-   $ cmake -DCMAKE_BUILD_TYPE=Release ..
-   $ cmake --build . --config Release
+   > mkdir build && cd build
+   > cmake -DCMAKE_BUILD_TYPE=Release ..
+   > cmake --build . --config Release
 
 4. Load the compiled hypervisor kernel module (.ko) directly into physical CPU memory:
-   $ sudo insmod enclave_vmm_intel.ko  # For Intel Systems
-   $ sudo insmod enclave_vmm_amd.ko    # For AMD Systems
+   > sudo insmod enclave_vmm_intel.ko  # For Intel Systems
+   > sudo insmod enclave_vmm_amd.ko    # For AMD Systems
 
 5. Execute deployment pipeline and reboot node to initialize Ring -1 VMM containment:
-   $ sudo ./deploy_enclave_server.sh
-   $ sudo reboot
+   > sudo ./deploy_enclave_server.sh
+   > sudo reboot
 
 6. Execute automated verification routine post-boot to confirm health:
-   $ sudo ../tests/verify_boot.sh
+   > sudo ../tests/verify_boot.sh
 
 ### B. Windows-Based Host Environments (Windows 10 / 11 / Server)
 1. Install Visual Studio 2022 (or standalone Visual Studio Build Tools). During installation, explicitly select the "Desktop development with C++" workload check box and the "Windows Driver Kit (WDK)" to initialize the MSVC compiler and kernel driver build paths.
