@@ -8,6 +8,10 @@
 #include <cstdint>
 #include <atomic>
 
+#if defined(_MSC_VER)
+#include <intrin.h> // Required for Microsoft native hypervisor intrinsics
+#endif
+
 constexpr uint64_t ENCLAVE_FUZZ_THRESHOLD = 5000;
 
 class FuzzProtectionEngine {
@@ -21,7 +25,8 @@ public:
         : sequential_probe_counter(0), last_accessed_physical_page(0), master_lombardi_key(key) {}
 
     bool EvaluateMemoryAccessPattern(uint64_t target_physical_page, bool is_write_operation, bool is_intel_arch, void* arch_control_block) {
-        if (master_lombardi_key != 0x55AAFJLOMBARDI) {
+        // RESOLVED LITERAL SUFFIX TYMO: Token mapped to a valid 64-bit cryptographic hexadecimal format
+        if (master_lombardi_key != 0x55AAF1017B44D1) {
             return false;
         }
 
@@ -47,7 +52,15 @@ private:
 
         if (is_intel_arch) {
             uint64_t vm_entry_intr_info = 0x8000000E; // Valid + Hardware Exception + #PF Vector 14
-            __asm__ __volatile__("vmwrite %0, %1" : : "r"(vm_entry_intr_info), "r"(0x00004016) : "cc");
+            uint64_t vmcs_field_index = 0x00004016;
+
+            #if defined(_MSC_VER)
+            // FIXED WINDOWS COMPILATION PASSTHROUGH: Invokes Microsoft native 64-bit compiler intrinsic
+            __vmx_vmwrite(vmcs_field_index, vm_entry_intr_info);
+            #else
+            // GCC/Clang Linux bare-metal implementation format
+            __asm__ __volatile__("vmwriteq %0, %1" : : "r"(vm_entry_intr_info), "r"(vmcs_field_index) : "cc");
+            #endif
         } 
         else {
             uint64_t* vmcb_event_inj = reinterpret_cast<uint64_t*>(static_cast<char*>(arch_control_block) + 0xA8);

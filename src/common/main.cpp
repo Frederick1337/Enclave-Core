@@ -9,13 +9,18 @@
 #include <cstdlib>
 #include <immintrin.h> // Required for RDRAND hardware intrinsic functions
 
+#if defined(_MSC_VER)
+#include <intrin.h>    // Required for Microsoft native CPUID and hardware management intrinsics
+#endif
+
 struct SystemTopology {
     uint32_t cpu_vendor; // 1 = Intel, 2 = AMD
     bool vmm_active;
 };
 
-// Global, read-only host-space variable for true hardware entropy masking
-extern "C" uint64_t g_DynamicMutationKey = 0;
+// RESOLVED LINKAGE DIAGNOSTIC: Separate declaration scope from initialization to prevent -Werror duplication
+extern "C" uint64_t g_DynamicMutationKey;
+uint64_t g_DynamicMutationKey = 0;
 
 struct GuestContext;
 struct VMCB;
@@ -24,31 +29,69 @@ struct GuestRegisters;
 class HardwareAuditor {
 public:
     static uint32_t DetectVendor() {
+        uint32_t ebx_val = 0;
+        #if defined(_MSC_VER)
+        int cpu_info[4] = {0};
+        __cpuid(cpu_info, 0);
+        ebx_val = static_cast<uint32_t>(cpu_info[1]);
+        #else
         uint32_t eax=0, ebx=0, ecx=0, edx=0;
         __asm__ __volatile__("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(0));
-        if (ebx == 0x756e6547) return 1; // GenuineIntel
-        if (ebx == 0x68747541) return 2; // AuthenticAMD
+        ebx_val = ebx;
+        #endif
+
+        if (ebx_val == 0x756e6547) return 1; // GenuineIntel
+        if (ebx_val == 0x68747541) return 2; // AuthenticAMD
         return 0;
     }
     
     static bool CheckHypervisor() {
+        uint32_t ecx_val = 0;
+        #if defined(_MSC_VER)
+        int cpu_info[4] = {0};
+        __cpuid(cpu_info, 1);
+        ecx_val = static_cast<uint32_t>(cpu_info[2]);
+        #else
         uint32_t eax=0, ebx=0, ecx=0, edx=0;
         __asm__ __volatile__("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(1));
-        return (ecx & (1ULL << 31)); 
+        ecx_val = ecx;
+        #endif
+        return (ecx_val & (1ULL << 31)); 
     }
 
     // Pulls the physical processor's factory-fused 64-bit unique serial number footprint
     static uint64_t GetProcessorSiliconFingerprint() {
+        uint32_t ecx_val = 0;
+        uint32_t edx_val = 0;
+
+        #if defined(_MSC_VER)
+        int cpu_info[4] = {0};
+        __cpuid(cpu_info, 3);
+        ecx_val = static_cast<uint32_t>(cpu_info[2]);
+        edx_val = static_cast<uint32_t>(cpu_info[3]);
+        #else
         uint32_t eax = 0, ebx = 0, ecx = 0, edx = 0;
-        // Query CPUID leaf 3 (Processor Serial Number - if supported or fallback to chip signature matrices)
         __asm__ __volatile__("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(3));
+        ecx_val = ecx;
+        edx_val = edx;
+        #endif
         
-        uint64_t silicon_id = ((uint64_t)edx << 32) | ecx;
+        uint64_t silicon_id = ((uint64_t)edx_val << 32) | ecx_val;
         
         // Failsafe hardware stabilization mapping if low-level leaf returns null or disabled
         if (silicon_id == 0) {
+            #if defined(_MSC_VER)
+            // RESOLVED SHADOWING WARNING: Reuse the outer array footprint to clear C4456
+            __cpuid(cpu_info, 1);
+            uint32_t eax_val = static_cast<uint32_t>(cpu_info[0]);
+            uint32_t edx_fallback = static_cast<uint32_t>(cpu_info[3]);
+            #else
+            uint32_t eax = 0, ebx = 0, ecx = 0, edx = 0;
             __asm__ __volatile__("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(1));
-            silicon_id = ((uint64_t)eax << 32) | edx; // Mix micro-architecture stepping and family IDs
+            uint32_t eax_val = eax;
+            uint32_t edx_fallback = edx;
+            #endif
+            silicon_id = ((uint64_t)eax_val << 32) | edx_fallback;
         }
         return silicon_id;
     }
@@ -61,20 +104,23 @@ public:
 
         while (retry < MAX_RETRIES) {
             #if defined(__x86_64__) || defined(_M_X64)
-            if (_rdrand64_step(&trng_seed)) {
+            if (_rdrand64_step(reinterpret_cast<unsigned long long*>(&trng_seed))) {
                 uint64_t unique_hardware_fingerprint = GetProcessorSiliconFingerprint();
-                
-                // Mathematically bind the physical chip serial footprint into the dynamic entropy key space
                 return trng_seed ^ unique_hardware_fingerprint; 
             }
             #else
-            trng_seed = 0x55AAFJLOMBARDI_FALLBACK;
+            trng_seed = 0x55AAF1017B44D1; 
             return trng_seed ^ GetProcessorSiliconFingerprint();
             #endif
             retry++;
         }
 
+        #if defined(_MSC_VER)
+        _disable();
+        while (true) { }
+        #else
         __asm__ __volatile__("cli; hlt");
+        #endif
         return 0; 
     }
 };
@@ -95,7 +141,6 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    // Initialize the global mutation key: Fusing True Random Entropy with the physical Silicon Serial Number
     g_DynamicMutationKey = HardwareAuditor::GenerateHardwareEntropySeed();
     std::cout << "[SECURITY ATTESTATION PASSED] System verified under hard virtualization control.\n";
     std::cout << "[SILICON FINGERPRINT] Mutation logic permanently serialized to this physical hardware node.\n";

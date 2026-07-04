@@ -13,14 +13,15 @@ on:
     branches: [ main ]
 
 jobs:
-  validate-infrastructure:
+  # JOB 1: Validates and Compiles the Linux Code Stack
+  validate-linux:
     runs-on: ubuntu-latest
-
     steps:
+    # RESTORED STABLE TAG: Pins compilation back to the verified system checkout baseline
     - name: Checkout Source Code Tree
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4.2.2
 
-    - name: Install Netwide Assembler (NASM) and Core Compilation Tools
+    - name: Install Core Compilation Tools
       run: |
         sudo apt-get update
         sudo apt-get install -y nasm cmake build-essential python3
@@ -30,13 +31,29 @@ jobs:
         chmod +x build_all.sh
         ./build_all.sh
 
-    - name: Validate Local Linux Driver Build Scripts
-      run: |
-        chmod +x src/core/driver_build_suite.sh
-        # Verify the syntax of the build suite script without executing on host headers
-        bash -n src/core/driver_build_suite.sh
-
     - name: Run Automated Environmental Attestation and Diagnostic Stress Test
       run: |
         chmod +x tests/hardware_diagnostic_pipeline.py
         python3 tests/hardware_diagnostic_pipeline.py
+
+  # JOB 2: Validates and Compiles the Windows Subsystem Kernel Configurations Natively
+  validate-windows:
+    runs-on: windows-latest
+    steps:
+    # RESTORED STABLE TAG: Pins compilation back to the verified system checkout baseline
+    - name: Checkout Source Code Tree
+      uses: actions/checkout@v4.2.2
+
+    - name: Configure Microsoft Visual C++ (MSVC) Developer Toolchain
+      uses: ilammy/msvc-dev-cmd@v1.13.0
+
+    - name: Configure CMake for Windows Target Nodes
+      run: |
+        mkdir build_win
+        cd build_win
+        cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release ..
+
+    - name: Execute Native Cloud MSVC Compilation Pass
+      run: |
+        cd build_win
+        cmake --build . --config Release

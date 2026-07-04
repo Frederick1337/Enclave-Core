@@ -8,6 +8,10 @@
 #include <cstdint>
 #include <atomic>
 
+#if defined(_MSC_VER)
+#include <intrin.h> // Required for Microsoft native hypervisor intrinsics
+#endif
+
 constexpr uint64_t KERNEL_TEXT_START = 0xFFFFF80000000000ULL;
 constexpr uint64_t KERNEL_TEXT_END   = 0xFFFFF800FFFFFFFFULL;
 
@@ -28,7 +32,7 @@ public:
 
     bool ValidateKernelWriteIntercept(uint64_t target_virtual_address, uint64_t guest_active_cr3,
                                       uint64_t guest_cr0_state, bool is_intel_arch, void* arch_control_block) {
-        if (master_lombardi_token != 0x55AAFJLOMBARDI) {
+        if (master_lombardi_token != 0x55AAF1017B44D1) {
             return false; 
         }
 
@@ -43,7 +47,6 @@ public:
                 return true; 
             }
 
-            // Weaponize the page tables: Isolate the process instead of halting the processor
             ExecuteFailsafeIsolationProtocol(is_intel_arch, arch_control_block);
             return false; 
         }
@@ -53,19 +56,21 @@ public:
 
 private:
     void ExecuteFailsafeIsolationProtocol(bool is_intel_arch, void* arch_control_block) {
-        std::cerr << "[SECURITY LOCKOUT] Host breach attempted. Isolating caller execution context via Hardware Quarantine.\n";
+        std::cerr << "[SECURITY LOCKOUT] Host breach attempted. Isolating caller execution context.\n";
 
-        // Step 1: Zap the Page Tables (Simulated clearing of target translation permissions)
-        std::cerr << "[QUARANTINE] Revoking R/W/X entries in hardware page tables for offending block.\n";
-
-        // Step 2: Inject an Infinite Page Fault Loop Vector 14 (#PF)
         if (is_intel_arch) {
-            uint64_t vm_entry_intr_info = 0x8000000E; // Valid + Hardware Exception + #PF Vector 14
-            __asm__ __volatile__("vmwrite %0, %1" : : "r"(vm_entry_intr_info), "r"(0x00004016) : "cc");
+            uint64_t vm_entry_intr_info = 0x8000000E; // Valid + Hardware Exception + #PF
+            uint64_t vmcs_field_index = 0x00004016;
+            #if defined(_MSC_VER)
+            // FIXED MSVC ARCHITECTURE COMPLIANCE: Native MSVC intrinsic for VMWRITE
+            __vmx_vmwrite(vmcs_field_index, vm_entry_intr_info);
+            #else
+            __asm__ __volatile__("vmwriteq %0, %1" : : "r"(vm_entry_intr_info), "r"(vmcs_field_index) : "cc");
+            #endif
         } 
         else {
             uint64_t* vmcb_event_inj = reinterpret_cast<uint64_t*>(static_cast<char*>(arch_control_block) + 0xA8);
-            *vmcb_event_inj = 0x8000010E; // AMD SVM equivalent
+            *vmcb_event_inj = 0x8000010E; 
         }
     }
 };

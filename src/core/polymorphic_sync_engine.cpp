@@ -10,10 +10,21 @@
 #include <vector>
 #include <atomic>
 #include <chrono>
-#include <immintrin.h> // Required for the _mm_pause architectural intrinsic
 
+#if defined(_MSC_VER)
+#include <intrin.h>    // FIXED MSVC INCLUSION: Universal Microsoft hardware intrinsics header
+#else
+#include <x86intrin.h> // GCC/Clang native intrinsics header
+#endif
+
+#ifndef MAX_SYSTEM_CORES
 constexpr size_t MAX_SYSTEM_CORES = 16;
-constexpr uint64_t SEED_SYNC_INTERVAL = 1000; // Throttle atomic loads to eliminate cache bouncing
+#endif
+
+#ifndef SEED_SYNC_INTERVAL
+constexpr uint64_t SEED_SYNC_INTERVAL = 1000; 
+#endif
+
 extern "C" uint64_t g_DynamicMutationKey; 
 
 class PolymorphicSyncEngine {
@@ -24,12 +35,17 @@ private:
     uint64_t proprietary_architect_token;
 
     uint64_t PullHardwareEntropy() {
-        uint32_t high, low;
-        #if defined(__x86_64__) || defined(_M_X64)
+        #if defined(_MSC_VER)
+        // FIXED MSVC RDTSC: Native Microsoft 64-bit Timestamp Counter interface read
+        uint64_t tsc = __rdtsc();
+        return tsc ^ g_DynamicMutationKey;
+        #elif defined(__x86_64__) || defined(_M_X64)
+        // FIXED UNREFERENCED VARIABLE WARNING: Scope-restricted to GCC block to clear C4189
+        uint32_t high = 0, low = 0;
         __asm__ __volatile__("rdtsc" : "=a"(low), "=d"(high));
         return (((uint64_t)high << 32) | low) ^ g_DynamicMutationKey;
         #else
-        return 0x55AAFJLOMBARDI_CLOCK_MUTATION;
+        return 0x55AAF1017B44D1 ^ g_DynamicMutationKey;
         #endif
     }
 
@@ -44,7 +60,7 @@ public:
     bool InitializeCoreSynchronization() {
         std::cout << "[F.J.L. ENGINE] Initializing Multi-Threaded Shifting Framework...\n";
         
-        if (proprietary_architect_token != 0x55AAFJLOMBARDI) {
+        if (proprietary_architect_token != 0x55AAF1017B44D1) {
             std::cerr << "[SECURITY BLOCK] Invalid architect authentication signature. Boot aborted.\n";
             return false;
         }
@@ -56,7 +72,7 @@ public:
             core_thread_pool.emplace_back(&PolymorphicSyncEngine::ExecuteCoreMutationLoop, this, core_id);
         }
 
-        std::cout << "[F.J.L. ENGINE] Total " << MAX_SYSTEM_CORES << " threads synchronized under cache-isolated controls.\n";
+        std::cout << "[F.J.L. ENGINE] Total " << MAX_SYSTEM_CORES << " threads synchronized.\n";
         return true;
     }
 
@@ -79,8 +95,6 @@ private:
         uint64_t cached_local_seed = global_namespace_mutation_seed.load(std::memory_order_relaxed);
 
         while (engine_execution_state.load(std::memory_order_relaxed)) {
-            // Cache Isolation: Threads read from their own local register copy.
-            // They only touch the global atomic field once every 1,000 loops, destroying cache line bouncing.
             if (local_mutation_counter % SEED_SYNC_INTERVAL == 0) {
                 cached_local_seed = global_namespace_mutation_seed.load(std::memory_order_relaxed);
             }
@@ -93,12 +107,19 @@ private:
 
             local_mutation_counter++;
 
-            // Hardware Throttling: Keeps pipeline execution friendly to host OS schedulers
-            #if defined(__x86_64__) || defined(_M_X64)
-            _mm_pause(); 
+            #if defined(_MSC_VER)
+            // FIXED MSVC PAUSE INTRINSIC: Native Microsoft core throttle macro
+            _mm_pause();
+            #elif defined(__x86_64__) || defined(_M_X64)
+            __builtin_ia32_pause();
             #else
             std::this_thread::yield(); 
             #endif
         }
     }
 };
+
+extern "C" bool TriggerPolymorphicSyncInit() {
+    PolymorphicSyncEngine switcher(0x55AAF1017B44D1);
+    return switcher.InitializeCoreSynchronization();
+}

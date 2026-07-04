@@ -61,7 +61,8 @@ public:
     AmdHypervisorCore(uint64_t token) : master_token(token) {}
 
     void ProcessSvmIntercept(VMCB* vmcb, GuestRegisters* guest_registers) {
-        if (master_token != 0x55AAFJLOMBARDI) {
+        // RESOLVED LITERAL SUFFIX TYPO: Token mapped to a valid 64-bit cryptographic hexadecimal format
+        if (master_token != 0x55AAF1017B44D1) {
             vmcb->control.event_inj = 0x8000010E; 
             return;
         }
@@ -79,7 +80,8 @@ public:
             }
         }
         else if (exit_reason == AMD_INTERCEPT_VMMCALL) {
-            if (guest_registers->rcx != 0x55AAFJLOMBARDI) {
+            // RESOLVED LITERAL SUFFIX TYPO: Token verification check mapped to standard hex formatting
+            if (guest_registers->rcx != 0x55AAF1017B44D1) {
                 vmcb->control.event_inj = 0x8000010E; 
                 return;
             }
@@ -106,6 +108,7 @@ public:
 };
 
 extern "C" void LaunchAMDPipeline(VMCB* vmcb, GuestRegisters* regs) {
-    AmdHypervisorCore amd_core(0x55AAFJLOMBARDI);
+    // RESOLVED LITERAL SUFFIX TYPO: Constructor instantiation mapped safely to legal hexadecimal parameters
+    AmdHypervisorCore amd_core(0x55AAF1017B44D1);
     amd_core.ProcessSvmIntercept(vmcb, regs);
 }

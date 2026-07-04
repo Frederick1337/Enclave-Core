@@ -8,6 +8,10 @@
 #include <cstdint>
 #include <cstdlib>
 
+#if defined(_MSC_VER)
+#include <intrin.h> // Required for Microsoft native hypervisor intrinsics
+#endif
+
 constexpr uint64_t EXIT_REASON_EXTERNAL_INTERRUPT = 1;
 constexpr uint64_t EXIT_REASON_VMCALL             = 18;
 constexpr uint64_t EXIT_REASON_CR_ACCESS          = 28;
@@ -33,18 +37,41 @@ private:
 
     uint64_t ReadVMCSField(uint64_t field) {
         uint64_t value = 0;
+        #if defined(_MSC_VER)
+        // FIXED MSVC ARCHITECTURE COMPLIANCE: Native MSVC intrinsic for VMREAD
+        __vmx_vmread(field, &value);
+        #else
         __asm__ __volatile__("vmread %1, %0" : "=r"(value) : "r"(field) : "cc");
+        #endif
         return value;
     }
 
     void WriteVMCSField(uint64_t field, uint64_t value) {
-        __asm__ __volatile__("vmwrite %0, %1" : : "r"(value), "r"(field) : "cc");
+        #if defined(_MSC_VER)
+        // FIXED MSVC ARCHITECTURE COMPLIANCE: Native MSVC intrinsic for VMWRITE
+        __vmx_vmwrite(field, value);
+        #else
+        __asm__ __volatile__("vmwriteq %0, %1" : : "r"(value), "r"(field) : "cc");
+        #endif
     }
 
     void FlushIntelSecureContext(uint64_t ept_pointer) {
         #if defined(__x86_64__)
-        struct { uint64_t eptp; uint64_t rsvd; } inv_descriptor = { ept_pointer, 0 };
-        __asm__ __volatile__("invvpid %0, %1" : : "r"(1), "m"(inv_descriptor) : "cc", "memory");
+        uint64_t invvpid_type = 1; 
+        struct { uint64_t vpid; uint64_t linear_address; } inv_descriptor = { ept_pointer, 0 };
+        #if defined(_MSC_VER)
+        // FIXED MSVC ARCHITECTURE COMPLIANCE: Native MSVC intrinsic for INVVPID
+        __vmx_invvpid(static_cast<int>(invvpid_type), &inv_descriptor);
+        #else
+        __asm__ __volatile__(
+            "invvpid (%0), %1"
+            :
+            : "r"(&inv_descriptor), "r"(invvpid_type)
+            : "cc", "memory"
+        );
+        #endif
+        #else
+        (void)ept_pointer;
         #endif
     }
 
@@ -52,17 +79,16 @@ public:
     IntelHypervisorCore(uint64_t token) : lombardi_auth_token(token), active_scrambled_cr3(0) {}
 
     void HandleHardwareVMExit(uint64_t exit_reason, GuestContext* context) {
-        if (lombardi_auth_token != 0x55AAFJLOMBARDI) {
+        if (lombardi_auth_token != 0x55AAF1017B44D1) {
             uint64_t vm_entry_intr_info = 0x8000000D; 
             WriteVMCSField(0x0000440C, vm_entry_intr_info);
             return;
         }
 
         if (exit_reason == EXIT_REASON_EXTERNAL_INTERRUPT) {
-            uint32_t trapped_vector = 0x2C; // Extract mouse vector from Interruption Info
+            uint32_t trapped_vector = 0x2C; 
             bool pass_to_os = RunHardwareInterruptAudit(trapped_vector, true, nullptr);
             if (!pass_to_os) {
-                // Advance RIP over the exit boundary to drop the interrupt cleanly
                 uint64_t rip = ReadVMCSField(VMCS_GUEST_RIP);
                 uint64_t insn_len = ReadVMCSField(VMCS_EXIT_INSN_LEN);
                 WriteVMCSField(VMCS_GUEST_RIP, rip + insn_len);
@@ -70,7 +96,7 @@ public:
             }
         }
         else if (exit_reason == EXIT_REASON_VMCALL) {
-            if (context->rcx != 0x55AAFJLOMBARDI) {
+            if (context->rcx != 0x55AAF1017B44D1) {
                 uint64_t vm_entry_intr_info = 0x8000000D; 
                 WriteVMCSField(0x00004016, vm_entry_intr_info);
                 return;
@@ -108,6 +134,6 @@ public:
 };
 
 extern "C" void LaunchIntelPipeline(uint64_t exit_reason, GuestContext* context) {
-    IntelHypervisorCore core_instance(0x55AAFJLOMBARDI);
+    IntelHypervisorCore core_instance(0x55AAF1017B44D1);
     core_instance.HandleHardwareVMExit(exit_reason, context);
 }
