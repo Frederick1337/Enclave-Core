@@ -1,45 +1,66 @@
 cmake_minimum_required(VERSION 3.20)
-project(EnclaveVMM Architecture)
+project(EnclaveCoreLocal LANGUAGES C CXX)
 
+# Enforce standard low-level system variables and standard compliant tracks
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Define core output directories
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+# Global project definitions for attribution and master logging tracking
+add_compile_definitions(MASTER_ARCHITECT="Frederick_Joseph_Lombardi")
+add_compile_definitions(ENCLAVE_DEBUG_MODE=1)
+
+# Platform-specific architecture configurations for low-overhead bare-metal compilation
 if(MSVC)
-    add_compile_options(/W4 /WX /GR- /EHs-c- /GS-)
+    # Windows Kernel-Mode Optimization Flags: Disables RTTI, exceptions, and stack protectors
+    add_compile_options(
+        /W4 
+        /WX 
+        /GR- 
+        /EHs-c- 
+        /GS- 
+        /wd4201 
+        /std:c++20
+    )
 else()
-    add_compile_options(-Wall -Wextra -Werror -fno-rtti -fno-exceptions -nostdlib -ffreestanding -fno-stack-protector)
+    # Linux Kernel Module Optimization Flags: Bare-metal standard options
+    add_compile_options(
+        -Wall 
+        -Wextra 
+        -Werror 
+        -fno-rtti 
+        -fno-exceptions 
+        -fno-stack-protector 
+        -O2
+    )
 endif()
 
-enable_language(ASM_NASM)
-
-set(INTEL_SOURCES 
-    src/core/intel/vmx_core.cpp 
-    src/core/intel/ept_handler.cpp
-)
-
-set(AMD_SOURCES 
-    src/core/amd/svm_core.cpp 
-    src/core/amd/npt_handler.cpp
-)
-
-set(SHARED_SOURCES
-    src/common/main.cpp
-    src/core/secure_logger.cpp
-    src/core/polymorphic_sync_engine.cpp
-    src/core/fuzz_protection_engine.cpp
-    src/core/encrypted_logger.cpp
-    src/core/kernel_hook_protection.cpp
+# Gather master local core hypervisor tracking files and interface sources
+set(SOURCE_FILES
+    src/main.cpp
+    src/common/enclave_integration.h
+    src/common/enclave_hypercall.h
+    src/core/vmx_core.cpp
+    src/core/svm_core.cpp
     src/core/interrupt_filter_engine.cpp
-    src/core/hardware_diagnostic_pipeline.cpp
-    src/boot/linux_module_wrapper.c
-    src/boot/windows_driver_wrapper.c
+    src/core/polymorphic_sync_engine.cpp
 )
 
-set(ASM_SOURCES src/boot/bootloader.asm)
+# Conditionally append the correct operational bare-metal kernel driver wrapper
+if(WIN32)
+    list(APPEND SOURCE_FILES src/boot/windows_driver_wrapper.c)
+else()
+    list(APPEND SOURCE_FILES src/boot/linux_module_wrapper.c)
+endif()
 
-# Multi-Target Binaries Configuration
-add_executable(enclave_vmm_intel ${SHARED_SOURCES} ${INTEL_SOURCES} ${ASM_SOURCES})
-set_target_properties(enclave_vmm_intel PROPERTIES COMFull_DEFINITIONS "ARCH_INTEL_VMX")
+# Build the master protected framework target executable
+add_executable(enclave_core_node ${SOURCE_FILES})
 
-add_executable(enclave_vmm_amd ${SHARED_SOURCES} ${AMD_SOURCES} ${ASM_SOURCES})
-set_target_properties(enclave_vmm_amd PROPERTIES COMFull_DEFINITIONS "ARCH_AMD_SVM")
+# Include target directory directories for universal visibility
+target_include_directories(enclave_core_node PUBLIC 
+    src/common
+    src/core
+)
