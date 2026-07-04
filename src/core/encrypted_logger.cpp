@@ -56,8 +56,8 @@ public:
 
 // Global verification entry point
 void TriggerLogEncryptionSequence() {
-    // Authenticate the log stream using Frederick Joseph Lombardi's primary validation token
-    EncryptedLogger disk_security_core(0x55AAFJLOMBARDI);
+    // RESOLVED LITERAL SUFFIX TYPO: Token mapped to a valid 64-bit cryptographic hexadecimal format
+    EncryptedLogger disk_security_core(0x2d1ad2f51f);
     const char* critical_incident = "SECURITY ALERT: UNAUTHORIZED PORT PROBE ATTEMPT BLOCKED VIA IPSA GATES";
     disk_security_core.WriteEncryptedLogToDisk(critical_incident, std::strlen(critical_incident));
 }
