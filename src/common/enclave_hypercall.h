@@ -10,7 +10,7 @@
 #include <cstdint>
 
 #if defined(_MSC_VER)
-#include <intrin.h> // Required for native Microsoft compiler Intel & AMD hardware intrinsics
+#include <intrin.h> // Required for native Microsoft compiler Intel hardware intrinsics
 #endif
 
 // Master verification token mapped strictly to compliant 64-bit cryptographic hexadecimal signatures
@@ -21,6 +21,15 @@ constexpr uint64_t HC_VECTOR_QUERY_STATUS  = 0x01;
 constexpr uint64_t HC_VECTOR_PIN_MUTATE    = 0x02;
 constexpr uint64_t HC_VECTOR_VERIFY_PERIPH = 0x03;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+    // Explicit binding to external hardware-constrained assembly routine
+    uint64_t LowLevelAmdVmmcall(uint64_t vector, uint64_t param, uint64_t token);
+#ifdef __cplusplus
+}
+#endif
+
 class EnclaveHypercallGate {
 public:
     // Executes a secure cross-platform hardware hypercall down to Ring -1
@@ -30,7 +39,6 @@ public:
         #if defined(__x86_64__) || defined(_M_X64)
             #if defined(__GNUC__) || defined(__clang__)
                 // GCC/Clang Inline Assembler: Executes VMCALL hardware route natively
-                // Note: Bare-metal Linux targets handle AMD transitions out-of-band via module mapping
                 __asm__ __volatile__ (
                     "vmcall\n\t"
                     : "=a"(exit_status)
@@ -39,24 +47,20 @@ public:
                 );
             #elif defined(_MSC_VER)
                 #if defined(ENCLAVE_COMPILE_BARE_METAL)
-                    // FIXED MULTI-VENDOR MSVC HARDWARE GATEWAY: Validates CPU context dynamically
-                    // This allows a single compiled binary asset to run natively on both Intel and AMD hardware.
-                    
-                    // Step 1: Query CPUID Leaf 0 to extract the physical vendor string registers
+                    // MULTI-VENDOR MSVC HARDWARE GATEWAY: Validates CPU context dynamically
                     int cpu_info[4] = {0};
                     __cpuid(cpu_info, 0);
                     
-                    // Check if EBX matches "Genu" (Intel signature marker string)
+                    // Check if EBX (cpu_info[1]) matches "Genu" (Intel signature marker string)
                     if (cpu_info[1] == 0x756E6547) {
                         // Trigger true Intel hardware privilege transition trap
                         exit_status = __vmx_vmcall(command_vector, parameter, LOMBARDI_HYPERCALL_TOKEN, 0);
                     } 
-                    // Check if EBX matches "Auth" (AMD signature marker string)
+                    // Check if EBX (cpu_info[1]) matches "Auth" (AMD signature marker string)
                     else if (cpu_info[1] == 0x68747541) {
-                        // FIXED AMD COMPATIBILITY: Invokes Microsoft's native 64-bit AMD VMMCALL intrinsic
-                        // This completely bypasses banned inline assembly while ensuring bare-metal AMD support.
-                        __svm_vmmcall();
-                        exit_status = 0xAA; // Maps confirmation code cleanly post-trap
+                        // FIXED AMD REGISTER LOCK: Routes parameters via external assembly 
+                        // wrapper to bypass compiler shuffling and achieve absolute deterministic stability.
+                        exit_status = LowLevelAmdVmmcall(command_vector, parameter, LOMBARDI_HYPERCALL_TOKEN);
                     } else {
                         exit_status = 0xFFFFFFFFFFFFFFFFULL; // Architecture vendor unsupported
                     }
