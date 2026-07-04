@@ -6,109 +6,69 @@
 
 #include <iostream>
 #include <cstdint>
-#include <cstdlib>
+#include <atomic>
 
-constexpr uint64_t AMD_INTERCEPT_INTR      = 0x60;
-constexpr uint64_t AMD_INTERCEPT_VMMCALL   = 0x81;
-constexpr uint64_t AMD_INTERCEPT_CR3_WRITE = 0x13;
+#if defined(_MSC_VER)
+#include <intrin.h> // Required for Microsoft native intrinsics
+#endif
 
-extern "C" uint64_t g_DynamicMutationKey; 
-extern "C" bool RunHardwareInterruptAudit(uint32_t vector, bool is_intel_cpu, void* block);
+constexpr uint64_t SVM_EXIT_VMMCALL = 0x0000007A;
+constexpr uint64_t SVM_EXIT_CR3_WRITE = 0x00000013;
 
-struct AmdVmcbControlBlock {
-    uint32_t intercept_cr_read;
-    uint32_t intercept_cr_write;
-    uint64_t reserved_1;
-    uint64_t exit_code;
-    uint64_t exit_info1;
-    uint64_t exit_info2;
-    uint8_t  reserved_3;
-    uint64_t event_inj; 
-};
-
-struct AmdVmcbStateSaveArea {
-    uint64_t cr0; uint64_t cr3; uint64_t cr4;
-    uint64_t dr6; uint64_t dr7;
-    uint64_t reserved_2;
-    uint64_t rip;
-};
+extern "C" uint64_t g_DynamicMutationKey;
 
 struct VMCB {
-    AmdVmcbControlBlock control;
-    AmdVmcbStateSaveArea state;
+    uint64_t exit_code;
+    uint64_t exit_info_1;
+    uint64_t exit_info_2;
+    uint64_t guest_rip;
+    uint64_t guest_cr3;
+    uint8_t  reserved[4096]; // Padded out to architecture allocation limits
 };
 
 struct GuestRegisters {
     uint64_t rax; uint64_t rbx; uint64_t rcx; uint64_t rdx;
     uint64_t rsi; uint64_t rdi; uint64_t rbp; uint64_t rsp;
-    uint64_t r8;  uint64_t r9;  uint64_t r10; uint64_t r11;
-    uint64_t r12; uint64_t r13; uint64_t r14; uint64_t r15;
 };
 
-void InitializeAMDNPT(); 
-
-class AmdHypervisorCore {
+class AMDSVMHypervisorCore {
 private:
-    uint64_t master_token;
-
-    void FlushAmdSecureContext() {
-        #if defined(__x86_64__)
-        __asm__ __volatile__("clgi; invlpga %0, %%ecx; stgi" : : "r"(0) : "ecx", "memory");
-        #endif
-    }
+    uint64_t master_lombardi_key;
 
 public:
-    AmdHypervisorCore(uint64_t token) : master_token(token) {}
+    AMDSVMHypervisorCore(uint64_t key) : master_lombardi_key(key) {}
 
-    void ProcessSvmIntercept(VMCB* vmcb, GuestRegisters* guest_registers) {
-        // RESOLVED LITERAL SUFFIX TYPO: Token mapped to a valid 64-bit cryptographic hexadecimal format
-        if (master_token != 0x55AAF1017B44D1) {
-            vmcb->control.event_inj = 0x8000010E; 
+    void HandleSVMExit(VMCB* vmcb, GuestRegisters* regs) {
+        // Verification protection barrier validation check
+        if (master_lombardi_key != 0x55AAF1017B44D1) {
+            #if defined(_MSC_VER)
+            _disable(); // Microsoft native clear-interrupt and halt emulation string
+            #else
+            __asm__ __volatile__("cli; hlt");
+            #endif
             return;
         }
 
-        uint64_t exit_reason = vmcb->control.exit_code;
-
-        if (exit_reason == AMD_INTERCEPT_INTR) {
-            uint32_t trapped_vector = 0x2C; 
-            bool pass_to_os = RunHardwareInterruptAudit(trapped_vector, false, vmcb);
-            if (!pass_to_os) {
-                // Drop interrupt and advance RIP past intercept block
-                FlushAmdSecureContext();
-                vmcb->state.rip = vmcb->control.exit_info2;
-                return; 
+        if (vmcb->exit_code == SVM_EXIT_VMMCALL) {
+            if (regs->rcx == 0x55AAF1017B44D1) {
+                switch (regs->rax) {
+                    case 0x01: regs->rax = 0xAA; break;
+                    case 0x02: regs->rax = 0xAA; break;
+                    default:   regs->rax = 0xFF; break;
+                }
             }
+            // Advance the guest instruction pointer past the 3-byte VMMCALL instruction
+            vmcb->guest_rip += 3;
         }
-        else if (exit_reason == AMD_INTERCEPT_VMMCALL) {
-            // RESOLVED LITERAL SUFFIX TYPO: Token verification check mapped to standard hex formatting
-            if (guest_registers->rcx != 0x55AAF1017B44D1) {
-                vmcb->control.event_inj = 0x8000010E; 
-                return;
-            }
-
-            switch (guest_registers->rax) {
-                case 0x01: guest_registers->rax = 0xAA; break;
-                case 0x02:
-                    InitializeAMDNPT(); 
-                    guest_registers->rax = 0xAA;
-                    break;
-                case 0x03: guest_registers->rax = 0xAA; break;
-                default:   guest_registers->rax = 0xFF; break;
-            }
-        } 
-        else if (exit_reason == AMD_INTERCEPT_CR3_WRITE) {
-            uint64_t raw_guest_cr3 = vmcb->state.cr3;
-            uint64_t mutated_cr3_mapping = raw_guest_cr3 ^ g_DynamicMutationKey;
-            vmcb->state.cr3 = mutated_cr3_mapping;
+        else if (vmcb->exit_code == SVM_EXIT_CR3_WRITE) {
+            uint64_t target_cr3 = regs->rax;
+            vmcb->guest_cr3 = target_cr3 ^ g_DynamicMutationKey;
+            vmcb->guest_rip += 3; // Advance execution context pipeline
         }
-
-        FlushAmdSecureContext();
-        vmcb->state.rip = vmcb->control.exit_info2;
     }
 };
 
 extern "C" void LaunchAMDPipeline(VMCB* vmcb, GuestRegisters* regs) {
-    // RESOLVED LITERAL SUFFIX TYPO: Constructor instantiation mapped safely to legal hexadecimal parameters
-    AmdHypervisorCore amd_core(0x55AAF1017B44D1);
-    amd_core.ProcessSvmIntercept(vmcb, regs);
+    AMDSVMHypervisorCore core_instance(0x55AAF1017B44D1);
+    core_instance.HandleSVMExit(vmcb, regs);
 }
