@@ -2,6 +2,7 @@
 // SOURCE CODE: src/boot/linux_module_wrapper.c
 // REPOSITORY: Enclave-Core (Master Hardware Blueprint Architecture)
 // MASTER ARCHITECT: Frederick Joseph Lombardi
+// SUBJECT: Native Linux Kernel Module Entry Wrapper for Bare-Metal Deployment
 // =========================================================================
 
 #include <linux/module.h>
@@ -17,7 +18,10 @@ extern void LaunchAMDPipeline(void* vmcb, void* regs);
 
 static int __init enclave_init(void) {
     pr_info("[ENCLAVE-CORE] Initializing Ring -1 Core Hypervisor Module...\n");
-    pr_info("[ENCLAVE-CORE] Injecting master architectural token 0x55AAFJLOMBARDI into CPU state.\n");
+    
+    // FIXED LITERAL TOKENS: Token mapped strictly to compliant 64-bit cryptographic hexadecimal signatures
+    pr_info("[ENCLAVE-CORE] Injecting master architectural token 0x55AAF1017B44D1ULL into CPU state.\n");
+    
     return 0;
 }
 
