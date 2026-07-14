@@ -1,69 +1,59 @@
 # =========================================================================
-# GITHUB AUTOMATION PIPELINE: .github/workflows/ci_test_pipeline.yml
-# MASTER ARCHITECT: Frederick Joseph Lombardi
-# SUBJECT: Production Multi-Target Cross-Platform Validation Matrix
+# AUTOMATION MANIFEST: .github/workflows/ci_test_pipeline.yml
+# PRINCIPAL ARCHITECT: Frederick Joseph Lombardi
+# SUBJECT: Comprehensive Multi-Target Build and Verification Automation
 # =========================================================================
 
-name: Project Enclave Automation Pipeline
+name: Enclave Hardware Verification CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
 
 jobs:
-  build-windows:
-    name: Windows User-Space Validity Validation
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout Code Repository Base Tree
-        uses: actions/checkout@v4
-
-      - name: Set up Netwide Assembler (NASM)
-        uses: ilammy/setup-nasm@v1
-
-      # Automatically finds and configures the native MSVC compiler tools (cl.exe) in the cloud
-      - name: Set up MSVC Developer Command Prompt
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Configure CMake Simulation Targets
-        shell: cmd
-        run: |
-          if exist build_win rmdir /s /q build_win
-          mkdir build_win
-          cd build_win
-          cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl ..
-
-      - name: Execute Windows Compiler Build Sweep
-        shell: cmd
-        run: |
-          cd build_win
-          cmake --build . --config Release
-
-  build-linux:
-    name: Linux User-Space Validity Validation
+  # JOB 1: Validates and Compiles the Linux Code Stack
+  validate-linux:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Code Repository Base Tree
-        uses: actions/checkout@v4
+    # RESTORED STABLE TAG: Pins compilation back to the verified system checkout baseline
+    - name: Checkout Source Code Tree
+      uses: actions/checkout@v4.2.2
 
-      # Install bare-metal native linux build essentials and nasm packages out-of-band
-      - name: Install System Toolchain Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake nasm
+    - name: Install Core Compilation Tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y nasm cmake build-essential python3
 
-      - name: Configure CMake Simulation Targets
-        run: |
-          if [ -d "build_linux" ]; then rm -rf build_linux; fi
-          mkdir build_linux
-          cd build_linux
-          cmake -DCMAKE_BUILD_TYPE=Release ..
+    - name: Execute Multi-Target Toolchain Compilation
+      run: |
+        chmod +x build_all.sh
+        ./build_all.sh
 
-      - name: Execute Linux Compiler Build Sweep
-        run: |
-          cd build_linux
-          cmake --build . --config Release
+    - name: Run Automated Environmental Attestation and Diagnostic Stress Test
+      run: |
+        chmod +x tests/hardware_diagnostic_pipeline.py
+        python3 tests/hardware_diagnostic_pipeline.py
+
+  # JOB 2: Validates and Compiles the Windows Subsystem Kernel Configurations Natively
+  validate-windows:
+    runs-on: windows-latest
+    steps:
+    # RESTORED STABLE TAG: Pins compilation back to the verified system checkout baseline
+    - name: Checkout Source Code Tree
+      uses: actions/checkout@v4.2.2
+
+    - name: Configure Microsoft Visual C++ (MSVC) Developer Toolchain
+      uses: ilammy/msvc-dev-cmd@v1.13.0
+
+    - name: Configure CMake for Windows Target Nodes
+      run: |
+        mkdir build_win
+        cd build_win
+        cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release ..
+
+    - name: Execute Native Cloud MSVC Compilation Pass
+      run: |
+        cd build_win
+        cmake --build . --config Release
