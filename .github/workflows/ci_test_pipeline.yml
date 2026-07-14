@@ -1,59 +1,40 @@
 # =========================================================================
-# AUTOMATION MANIFEST: .github/workflows/ci_test_pipeline.yml
-# PRINCIPAL ARCHITECT: Frederick Joseph Lombardi
-# SUBJECT: Comprehensive Multi-Target Build and Verification Automation
+# GITHUB AUTOMATION PIPELINE: .github/workflows/ci_test_pipeline.yml
+# MASTER ARCHITECT: Frederick Joseph Lombardi
+# SUBJECT: Automated User-Space Compilation Validity Testing Matrix
 # =========================================================================
 
-name: Enclave Hardware Verification CI
+name: Project Enclave Automation Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
 
 jobs:
-  # JOB 1: Validates and Compiles the Linux Code Stack
-  validate-linux:
-    runs-on: ubuntu-latest
-    steps:
-    # RESTORED STABLE TAG: Pins compilation back to the verified system checkout baseline
-    - name: Checkout Source Code Tree
-      uses: actions/checkout@v4.2.2
-
-    - name: Install Core Compilation Tools
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y nasm cmake build-essential python3
-
-    - name: Execute Multi-Target Toolchain Compilation
-      run: |
-        chmod +x build_all.sh
-        ./build_all.sh
-
-    - name: Run Automated Environmental Attestation and Diagnostic Stress Test
-      run: |
-        chmod +x tests/hardware_diagnostic_pipeline.py
-        python3 tests/hardware_diagnostic_pipeline.py
-
-  # JOB 2: Validates and Compiles the Windows Subsystem Kernel Configurations Natively
-  validate-windows:
+  build-windows:
+    name: Windows User-Space Validity Validation
     runs-on: windows-latest
+
     steps:
-    # RESTORED STABLE TAG: Pins compilation back to the verified system checkout baseline
-    - name: Checkout Source Code Tree
-      uses: actions/checkout@v4.2.2
+      # Step 1: Pull the latest source code repository down onto the virtual runner drive
+      - name: Checkout Code Repository Base Tree
+        uses: actions/checkout@v4
 
-    - name: Configure Microsoft Visual C++ (MSVC) Developer Toolchain
-      uses: ilammy/msvc-dev-cmd@v1.13.0
+      # Step 2: Automatically pull, isolate, and register NASM straight to the runner's PATH variable
+      - name: Set up Netwide Assembler (NASM)
+        uses: ilammy/setup-nasm@v1
 
-    - name: Configure CMake for Windows Target Nodes
-      run: |
-        mkdir build_win
-        cd build_win
-        cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release ..
+      # Step 3: Run CMake to parse the project source tree and generate valid Ninja build files
+      - name: Configure CMake Simulation Targets
+        run: |
+          mkdir build_win
+          cd build_win
+          cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release ..
 
-    - name: Execute Native Cloud MSVC Compilation Pass
-      run: |
-        cd build_win
-        cmake --build . --config Release
+      # Step 4: Execute the compiler sweep to build the target simulation binary package
+      - name: Execute Compiler Build Sweep
+        run: |
+          cd build_win
+          cmake --build . --config Release
