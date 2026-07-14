@@ -24,13 +24,17 @@ jobs:
       - name: Set up Netwide Assembler (NASM)
         uses: ilammy/setup-nasm@v1
 
+      # Force CMake to select the native MSVC compiler tools and ignore MinGW allocations
       - name: Configure CMake Simulation Targets
+        shell: cmd
         run: |
+          if exist build_win rmdir /s /q build_win
           mkdir build_win
           cd build_win
-          cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release ..
+          cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl ..
 
       - name: Execute Windows Compiler Build Sweep
+        shell: cmd
         run: |
           cd build_win
           cmake --build . --config Release
@@ -51,6 +55,7 @@ jobs:
 
       - name: Configure CMake Simulation Targets
         run: |
+          if [ -d "build_linux" ]; then rm -rf build_linux; fi
           mkdir build_linux
           cd build_linux
           cmake -DCMAKE_BUILD_TYPE=Release ..

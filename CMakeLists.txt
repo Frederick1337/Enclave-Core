@@ -120,7 +120,7 @@ endif()
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     # Enforce standard-compliant optimization flags and unlock hardware RDRAND generation natively
     target_compile_options(enclave_system_node PRIVATE 
-        $<$<COMPILE_LANGUAGE:C,CXX>:-Wall -Wextra -Werror -std=c++20 -mrdrand>
+        $<$<COMPILE_LANGUAGE:C,CXX>:-Wall -Wextra -Werror -std=c++20 -mrdrnd>
     )
 endif()
 
