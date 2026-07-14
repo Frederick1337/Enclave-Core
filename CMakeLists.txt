@@ -1,77 +1,104 @@
 cmake_minimum_required(VERSION 3.20)
+
+# Explicitly enable C, CXX, and ASM_NASM languages for cross-compilation support
 project(EnclaveCoreNetworkTemp LANGUAGES C CXX ASM_NASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-
-file(MAKE_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
-
-add_compile_definitions(MASTER_ARCHITECT="Frederick_Joseph_Lombardi")
-add_compile_definitions(ENCLAVE_DEBUG_MODE=1)
-
-set(CMAKE_POSITION_INDEPENDENT_CODE OFF)
-
-if(MSVC)
-    # Windows MSVC Flag Mapping: Preserves exception unwinding for standard templates
-    add_compile_options(/W4 /WX /GR- /EHsc /GS- /wd4201 /std:c++20 /Oi)
-    
-    # Conditional Driver Linking: Uses console subsystem for hosted cloud simulation runners
-    if(DEFINED ENCLAVE_COMPILE_BARE_METAL)
-        add_link_options(/DRIVER /SUBSYSTEM:NATIVE /ENTRY:DriverEntry /MANIFEST:NO)
-    else()
-        add_link_options(/SUBSYSTEM:CONSOLE)
-    endif()
-else()
-    add_compile_options(-Wall -Wextra -Werror -fno-stack-protector -O2 -mcmodel=kernel -fno-pic -fno-pie -mrdrnd)
-    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>)
-    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>)
-endif()
-
-# AUTOMATED PATH DISCOVERY LAYER: Recursively maps existing source files (.cpp, .c)
+# Automatically gather all repository source files and templates
 file(GLOB_RECURSE SOURCE_FILES 
     "src/*.cpp" 
     "src/*.c"
+    "src/common/*.asm"
 )
 
-# RE-ARMED EXCLUSION LOOP: Drops bare-metal module wrappers on host cloud user-space tests
-if(NOT DEFINED ENCLAVE_COMPILE_BARE_METAL)
+# =========================================================================
+# OPERATING SYSTEM SOURCE FILE FILTER MATRIX
+# =========================================================================
+
+# Step 1: Always filter out incompatible Linux module files when building on Windows
+if(WIN32)
     foreach(FILE_PATH ${SOURCE_FILES})
-        if(FILE_PATH MATCHES "wrapper\\.c$")
+        if(FILE_PATH MATCHES "linux_module_wrapper\\.c$")
             list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
         endif()
     endforeach()
 endif()
 
-if(NOT SOURCE_FILES)
-    set(EMPTY_FALLBACK_FILE ${CMAKE_CURRENT_BINARY_DIR}/enclave_generated_init.cpp)
-    file(WRITE ${EMPTY_FALLBACK_FILE} "// Automated Project Enclave Initialization Anchor Component\nint main() { return 0; }\n")
-    set(SOURCE_FILES ${EMPTY_FALLBACK_FILE})
+# Step 2: Conditionally branch source compilation based on target environment parameters
+if(DEFINED ENCLAVE_COMPILE_BARE_METAL)
+    # PRODUCTION MODE: Exclude user-space application main loop to allow driver configuration
+    foreach(FILE_PATH ${SOURCE_FILES})
+        if(FILE_PATH MATCHES "main\\.cpp$")
+            list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
+        endif()
+    endforeach()
+    
+    message(STATUS "[TARGET CONFIGURATION] Preparing production-grade kernel-mode system driver.")
+else()
+    # SIMULATION MODE: Exclude kernel driver modules to prevent local header collision traps
+    foreach(FILE_PATH ${SOURCE_FILES})
+        if(FILE_PATH MATCHES "windows_driver_wrapper\\.c$")
+            list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
+        endif()
+    endforeach()
+    
+    message(STATUS "[TARGET CONFIGURATION] Preparing isolated user-space application simulator.")
 endif()
 
-add_executable(enclave_core_node ${SOURCE_FILES})
+# =========================================================================
+# TARGET GENERATION AND INCLUSION RULES
+# =========================================================================
 
-if(NOT MSVC)
-    target_link_options(enclave_core_node PRIVATE -no-pie)
-endif()
+# Build project target node from filtered list of files
+add_executable(enclave_system_node ${SOURCE_FILES})
 
-target_include_directories(enclave_core_node PUBLIC 
+# Configure default internal search directory mappings
+target_include_directories(enclave_system_node PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/intel
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/amd
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/network
     ${CMAKE_CURRENT_SOURCE_DIR}/src/boot
 )
 
-if(WIN32)
-    # Bypasses WDK dependencies unless explicitly building bare-metal installation binaries
+# KERNEL MODE ONLY: Bind Windows Kits development headers out-of-band to resolve ntddk paths
+if(DEFINED ENCLAVE_COMPILE_BARE_METAL)
+    target_include_directories(enclave_system_node PUBLIC
+        "C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.1839/km"
+        "C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.1839/shared"
+    )
+endif()
+
+# =========================================================================
+# MASTER COMPILER COMPLIANCE AND FLAG MANAGEMENT
+# =========================================================================
+
+if(MSVC)
+    # /WX  = Treat Warnings as Errors
+    # /W4  = Enable High-Level Production Compiler Diagnostic Warnings
+    # /GR- = Disable Runtime Type Information (RTTI) to comply with low-level targets
+    # /GS- = Disable Buffer Security Checks for clean out-of-band environments
+    # /wd4201 = Suppress nameless struct/union extension warning metrics
+    # /wd4702 = Suppress unreachable dead-code optimization alerts to fix build halt
+    target_compile_options(enclave_system_node PRIVATE 
+        /W4 /WX /GR- /EHsc /GS- /wd4201 /wd4702
+    )
+    
+    # Enable macro definitions to layout packet cache horizons safely
+    target_compile_definitions(enclave_system_node PRIVATE 
+        ENCLAVE_DEBUG_MODE=1
+        ENCLAVE_SOFTWARE_NETWORK_TRANSIT=1
+        MASTER_ARCHITECT="Frederick_Joseph_Lombardi"
+    )
+    
+    # Append low-level platform properties to handle link constraints
     if(DEFINED ENCLAVE_COMPILE_BARE_METAL)
-        target_link_libraries(enclave_core_node PUBLIC ntoskrnl.lib hal.lib wdfdriverstub.lib)
+        set_target_properties(enclave_system_node PROPERTIES SUFFIX ".sys")
+        # Direct MSVC linker to build a native kernel module infrastructure
+        target_link_options(enclave_system_node PRIVATE "/DRIVER" "/SUBSYSTEM:NATIVE")
     endif()
-else()
-    target_link_libraries(enclave_core_node PUBLIC pthread)
 endif()
