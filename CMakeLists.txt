@@ -75,19 +75,24 @@ target_include_directories(enclave_system_node PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/boot
 )
 
-# KERNEL MODE ONLY: Bind Windows Kits development headers dynamically using system environment variables
+# KERNEL MODE ONLY: Bind Windows Kits development headers dynamically
 if(DEFINED ENCLAVE_COMPILE_BARE_METAL AND WIN32)
-    # Safely pull the master environment variable path from the active terminal session state
-    set(WDK_INCLUDE_DIR "$ENV{WindowsSdkDir}Include/$ENV{WindowsSDKVersion}km")
-    set(WDK_SHARED_DIR "$ENV{WindowsSdkDir}Include/$ENV{WindowsSDKVersion}shared")
+    # Target path 1: Standard WDK deployment location verified by WinGet installer
+    set(WDK_BASE_PATH "C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0")
+    
+    # Target path 2: Disjoint ExtensionSDKs location used by standalone WDK bundles
+    set(WDK_EXT_PATH "C:/Program Files (x86)/Windows Kits/10/ExtensionSDKs/WindowsDriverKit/10.0.26100.0/Include/km")
 
-    # FALLBACK REALIGNMENT: If environment variables are blank, route to the universal baseline path
-    if(NOT EXISTS "${WDK_INCLUDE_DIR}")
-        set(WDK_INCLUDE_DIR "C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0/km")
-        set(WDK_SHARED_DIR "C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0/shared")
+    # Evaluate the file paths dynamically and apply the active directory to your build includes
+    if(EXISTS "${WDK_BASE_PATH}/km/ntddk.h")
+        set(WDK_INCLUDE_DIR "${WDK_BASE_PATH}/km")
+        set(WDK_SHARED_DIR "${WDK_BASE_PATH}/shared")
+    else()
+        set(WDK_INCLUDE_DIR "C:/Program Files (x86)/Windows Kits/10/ExtensionSDKs/WindowsDriverKit/10.0.26100.0/Include/km")
+        set(WDK_SHARED_DIR "C:/Program Files (x86)/Windows Kits/10/ExtensionSDKs/WindowsDriverKit/10.0.26100.0/Include/shared")
     endif()
 
-    message(STATUS "[WDK BINDING] Mapping Kernel Headers to: ${WDK_INCLUDE_DIR}")
+    message(STATUS "[WDK MATRIX MATCH] Directing include paths straight to: ${WDK_INCLUDE_DIR}")
 
     target_include_directories(enclave_system_node PUBLIC
         "${WDK_INCLUDE_DIR}"
@@ -100,13 +105,33 @@ endif()
 # =========================================================================
 
 if(MSVC)
+    # FIXED SCOPED COMPILER OPTIONS: Wrapped in compile language condition blocks.
     target_compile_options(enclave_system_node PRIVATE 
         $<$<COMPILE_LANGUAGE:C,CXX>:/W4 /WX /GR- /EHsc /GS- /wd4201 /wd4702>
     )
     
+    # Append low-level platform properties to handle link constraints
     if(DEFINED ENCLAVE_COMPILE_BARE_METAL)
         set_target_properties(enclave_system_node PROPERTIES SUFFIX ".sys")
-        target_link_options(enclave_system_node PRIVATE "/DRIVER" "/SUBSYSTEM:NATIVE")
+        
+        # STRIP DEFAULT WIN32 LIBRARIES: Prevents user-space dependency injection faults
+        set(CMAKE_C_STANDARD_LIBRARIES "")
+        set(CMAKE_CXX_STANDARD_LIBRARIES "")
+        
+        # FIXED DRIVER LINK SETTINGS: Strips /MANIFEST and clears out user-space default libraries
+        target_link_options(enclave_system_node PRIVATE 
+            "/DRIVER" 
+            "/SUBSYSTEM:NATIVE" 
+            "/MANIFEST:NO"
+            "/NODEFAULTLIB"
+            "/ENTRY:DriverEntry"
+        )
+        
+        # Ingest required kernel entry libraries from the WDK
+        target_link_libraries(enclave_system_node PRIVATE 
+            "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/km/x64/ntoskrnl.lib"
+            "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/km/x64/BufferOverflowK.lib"
+        )
     endif()
 endif()
 
@@ -123,4 +148,8 @@ target_compile_definitions(enclave_system_node PRIVATE
     ENCLAVE_DEBUG_MODE=1
     ENCLAVE_SOFTWARE_NETWORK_TRANSIT=1
     MASTER_ARCHITECT="Frederick_Joseph_Lombardi"
+    
+    # FIXED ARCHITECTURE BLOCK: Injects required kernel macros based on host system
+    $<$<PLATFORM_ID:Windows>:WIN32 _WINDOWS>
+    $<$<AND:$<PLATFORM_ID:Windows>,$<COMPILE_LANGUAGE:C,CXX>>:_AMD64_ _X64_ AMD64>
 )

@@ -6,7 +6,6 @@
 
 section .text
 
-; Export symbol using standard C-linkage visibility
 global LowLevelAmdVmmcall
 
 LowLevelAmdVmmcall:
@@ -15,14 +14,9 @@ LowLevelAmdVmmcall:
     ; RDX = parameter
     ; R8  = LOMBARDI_HYPERCALL_TOKEN
     
-    ; Enforce explicit hardware register constraints before the trap triggers:
-    mov rax, rcx  ; command_vector      -> RAX (Expected by Ring -1 Core)
-    mov rbx, rdx  ; parameter           -> RBX (Expected by Ring -1 Core)
-    mov rcx, r8   ; hypercall token     -> RCX (Expected by Ring -1 Core)
+    mov rax, rcx  ; command_vector      -> RAX
+    mov rbx, rdx  ; parameter           -> RBX
+    mov rcx, r8   ; hypercall token     -> RCX
     
-    ; Execute true hardware privilege transition trap into AMD SVM operation
     vmmcall       
-    
-    ; Return to C++ compiler layer. 
-    ; The exit status/confirmation code populated in RAX by the VMM passes back natively.
-    ret           
+    ret
