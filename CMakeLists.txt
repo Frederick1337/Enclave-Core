@@ -65,11 +65,23 @@ target_include_directories(enclave_system_node PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/boot
 )
 
-# KERNEL MODE ONLY: Bind Windows Kits development headers out-of-band to resolve ntddk paths
+# KERNEL MODE ONLY: Bind Windows Kits development headers dynamically using system environment variables
 if(DEFINED ENCLAVE_COMPILE_BARE_METAL)
+    # Safely pull the master environment variable path from the active terminal session state
+    set(WDK_INCLUDE_DIR "$ENV{WindowsSdkDir}Include/$ENV{WindowsSDKVersion}km")
+    set(WDK_SHARED_DIR "$ENV{WindowsSdkDir}Include/$ENV{WindowsSDKVersion}shared")
+
+    # FALLBACK REALIGNMENT: If environment variables are blank, route to the universal baseline path
+    if(NOT EXISTS "${WDK_INCLUDE_DIR}")
+        set(WDK_INCLUDE_DIR "C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0/km")
+        set(WDK_SHARED_DIR "C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0/shared")
+    endif()
+
+    message(STATUS "[WDK BINDING] Mapping Kernel Headers to: ${WDK_INCLUDE_DIR}")
+
     target_include_directories(enclave_system_node PUBLIC
-        "C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.1839/km"
-        "C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.1839/shared"
+        "${WDK_INCLUDE_DIR}"
+        "${WDK_SHARED_DIR}"
     )
 endif()
 
@@ -78,17 +90,13 @@ endif()
 # =========================================================================
 
 if(MSVC)
-    # /WX  = Treat Warnings as Errors
-    # /W4  = Enable High-Level Production Compiler Diagnostic Warnings
-    # /GR- = Disable Runtime Type Information (RTTI) to comply with low-level targets
-    # /GS- = Disable Buffer Security Checks for clean out-of-band environments
-    # /wd4201 = Suppress nameless struct/union extension warning metrics
-    # /wd4702 = Suppress unreachable dead-code optimization alerts to fix build halt
+    # FIXED SCOPED COMPILER OPTIONS: Wrapped in compile language condition blocks.
+    # This prevents high-level MSVC flags from leaking into NASM command streams.
     target_compile_options(enclave_system_node PRIVATE 
-        /W4 /WX /GR- /EHsc /GS- /wd4201 /wd4702
+        $<$<COMPILE_LANGUAGE:C,CXX>:/W4 /WX /GR- /EHsc /GS- /wd4201 /wd4702>
     )
     
-    # Enable macro definitions to layout packet cache horizons safely
+    # Enable macro definitions safely across all target source units
     target_compile_definitions(enclave_system_node PRIVATE 
         ENCLAVE_DEBUG_MODE=1
         ENCLAVE_SOFTWARE_NETWORK_TRANSIT=1
