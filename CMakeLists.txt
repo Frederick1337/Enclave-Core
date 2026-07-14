@@ -1,124 +1,61 @@
 cmake_minimum_required(VERSION 3.20)
 
-# Explicitly enable C, CXX, and ASM_NASM languages for cross-compilation support
 project(EnclaveCoreNetworkTemp LANGUAGES C CXX ASM_NASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Automatically gather all repository source files and templates
-file(GLOB_RECURSE SOURCE_FILES 
-    "src/*.cpp" 
-    "src/*.c"
-    "src/common/*.asm"
-    "src/boot/*.asm"
-)
+# =========================================================================
+# GLOBAL SOURCE FILE EXPLORATION MATRIX
+# =========================================================================
+file(GLOB_RECURSE ALL_CPP_FILES "src/*.cpp")
+file(GLOB_RECURSE ALL_C_FILES   "src/*.c")
+file(GLOB_RECURSE ALL_ASM_FILES "src/common/*.asm" "src/boot/*.asm")
 
 # =========================================================================
-# OPERATING SYSTEM SOURCE FILE FILTER MATRIX
+# CONDITIONAL MULTI-BUILD TARGET BRANCHING
 # =========================================================================
 
-# Step 1: Filter out platform-specific bootstrapping code based on compile environments
-if(WIN32)
-    foreach(FILE_PATH ${SOURCE_FILES})
-        if(FILE_PATH MATCHES "linux_module_wrapper\\.c$" OR FILE_PATH MATCHES "linux_driver_wrapper\\.c$")
-            list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
-        endif()
-    endforeach()
-else()
-    foreach(FILE_PATH ${SOURCE_FILES})
-        if(FILE_PATH MATCHES "windows_driver_wrapper\\.c$")
-            list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
-        endif()
-        if(FILE_PATH MATCHES "amd_gate\\.asm$")
-            list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
-        endif()
-    endforeach()
-endif()
-
-# Step 2: Conditionally branch source compilation based on target environment parameters
 if(DEFINED ENCLAVE_COMPILE_BARE_METAL)
-    # PRODUCTION MODE: Exclude user-space application main loop to allow driver configuration
-    foreach(FILE_PATH ${SOURCE_FILES})
-        if(FILE_PATH MATCHES "main\\.cpp$")
-            list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
+    message(STATUS "[MULTI-BUILD] Isolating target for Ring 0 Kernel-Mode Driver...")
+
+    # 1. HARDWARE ISOLATION: Natively extract only low-level kernel driver code
+    # Completely exclude user-space modules to prevent std::thread / std::ios_base link explosions
+    set(DRIVER_SOURCES "")
+    foreach(FILE_PATH ${ALL_C_FILES} ${ALL_ASM_FILES} ${ALL_CPP_FILES})
+        # Explicitly pull in only your low-level hardware virtualization layers
+        if(FILE_PATH MATCHES "windows_driver_wrapper\\.c$" OR 
+           FILE_PATH MATCHES "amd_gate\\.asm$" OR 
+           FILE_PATH MATCHES "bootloader\\.asm$" OR
+           FILE_PATH MATCHES "svm_core\\.cpp$" OR
+           FILE_PATH MATCHES "vmx_core\\.cpp$" OR
+           FILE_PATH MATCHES "ept_handler\\.cpp$" OR
+           FILE_PATH MATCHES "npt_handler\\.cpp$")
+            list(APPEND DRIVER_SOURCES ${FILE_PATH})
         endif()
     endforeach()
-    
-    message(STATUS "[TARGET CONFIGURATION] Preparing production-grade kernel-mode system driver.")
-else()
-    # SIMULATION MODE: Exclude kernel driver modules to prevent local header collision traps
-    foreach(FILE_PATH ${SOURCE_FILES})
-        if(FILE_PATH MATCHES "windows_driver_wrapper\\.c$" OR FILE_PATH MATCHES "linux_module_wrapper\\.c$" OR FILE_PATH MATCHES "linux_driver_wrapper\\.c$")
-            list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
-        endif()
-    endforeach()
-    
-    message(STATUS "[TARGET CONFIGURATION] Preparing isolated user-space application simulator.")
-endif()
 
-# =========================================================================
-# TARGET GENERATION AND INCLUSION RULES
-# =========================================================================
+    # 2. CREATE KERNEL TARGET
+    add_executable(enclave_system_node ${DRIVER_SOURCES})
+    set_target_properties(enclave_system_node PROPERTIES SUFFIX ".sys")
 
-# Build project target node from filtered list of files
-add_executable(enclave_system_node ${SOURCE_FILES})
-
-# Configure default internal search directory mappings
-target_include_directories(enclave_system_node PUBLIC 
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/common
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/intel
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/amd
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/network
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/boot
-)
-
-# KERNEL MODE ONLY: Bind Windows Kits development headers dynamically
-if(DEFINED ENCLAVE_COMPILE_BARE_METAL AND WIN32)
-    # Target path 1: Standard WDK deployment location verified by WinGet installer
+    # 3. CONFIGURE KERNEL INCLUDE PATHS
     set(WDK_BASE_PATH "C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0")
-    
-    # Target path 2: Disjoint ExtensionSDKs location used by standalone WDK bundles
-    set(WDK_EXT_PATH "C:/Program Files (x86)/Windows Kits/10/ExtensionSDKs/WindowsDriverKit/10.0.26100.0/Include/km")
-
-    # Evaluate the file paths dynamically and apply the active directory to your build includes
-    if(EXISTS "${WDK_BASE_PATH}/km/ntddk.h")
-        set(WDK_INCLUDE_DIR "${WDK_BASE_PATH}/km")
-        set(WDK_SHARED_DIR "${WDK_BASE_PATH}/shared")
-    else()
-        set(WDK_INCLUDE_DIR "C:/Program Files (x86)/Windows Kits/10/ExtensionSDKs/WindowsDriverKit/10.0.26100.0/Include/km")
-        set(WDK_SHARED_DIR "C:/Program Files (x86)/Windows Kits/10/ExtensionSDKs/WindowsDriverKit/10.0.26100.0/Include/shared")
-    endif()
-
-    message(STATUS "[WDK MATRIX MATCH] Directing include paths straight to: ${WDK_INCLUDE_DIR}")
-
-    target_include_directories(enclave_system_node PUBLIC
-        "${WDK_INCLUDE_DIR}"
-        "${WDK_SHARED_DIR}"
+    target_include_directories(enclave_system_node PUBLIC 
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/common
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+        "${WDK_BASE_PATH}/km" 
+        "${WDK_BASE_PATH}/shared"
     )
-endif()
 
-# =========================================================================
-# MASTER COMPILER COMPLIANCE AND FLAG MANAGEMENT
-# =========================================================================
-
-if(MSVC)
-    # FIXED SCOPED COMPILER OPTIONS: Wrapped in compile language condition blocks.
-    target_compile_options(enclave_system_node PRIVATE 
-        $<$<COMPILE_LANGUAGE:C,CXX>:/W4 /WX /GR- /EHsc /GS- /wd4201 /wd4702>
-    )
-    
-    # Append low-level platform properties to handle link constraints
-    if(DEFINED ENCLAVE_COMPILE_BARE_METAL)
-        set_target_properties(enclave_system_node PROPERTIES SUFFIX ".sys")
+    # 4. PRIVILEGED LINKER MAPS
+    if(MSVC)
+        target_compile_options(enclave_system_node PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:/W4 /WX /GR- /EHsc /GS- /wd4201 /wd4702>)
         
-        # STRIP DEFAULT WIN32 LIBRARIES: Prevents user-space dependency injection faults
         set(CMAKE_C_STANDARD_LIBRARIES "")
         set(CMAKE_CXX_STANDARD_LIBRARIES "")
         
-        # FIXED DRIVER LINK SETTINGS: Strips /MANIFEST and clears out user-space default libraries
         target_link_options(enclave_system_node PRIVATE 
             "/DRIVER" 
             "/SUBSYSTEM:NATIVE" 
@@ -127,20 +64,48 @@ if(MSVC)
             "/ENTRY:DriverEntry"
         )
         
-        # Ingest required kernel entry libraries from the WDK
         target_link_libraries(enclave_system_node PRIVATE 
             "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/km/x64/ntoskrnl.lib"
             "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/km/x64/BufferOverflowK.lib"
         )
     endif()
-endif()
 
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    # LANGUAGE ISOLATION FIXED: Pass specific dialect definitions exclusively to C or CXX source streams
-    target_compile_options(enclave_system_node PRIVATE 
-        $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Werror -mrdrnd>
-        $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Werror -std=c++20 -mrdrnd>
+else()
+    message(STATUS "[MULTI-BUILD] Isolating target for User-Space Simulation Executable...")
+
+    # 1. USER-SPACE ISOLATION: Strip out Ring 0 driver boot files to prevent conflicts
+    set(SIMULATOR_SOURCES "")
+    foreach(FILE_PATH ${ALL_CPP_FILES} ${ALL_C_FILES} ${ALL_ASM_FILES})
+        if(NOT FILE_PATH MATCHES "windows_driver_wrapper\\.c$" AND 
+           NOT FILE_PATH MATCHES "linux_driver_wrapper\\.c$" AND 
+           NOT FILE_PATH MATCHES "linux_module_wrapper\\.c$" AND
+           NOT FILE_PATH MATCHES "kernel_cpp_runtime\\.cpp$")
+            list(APPEND SIMULATOR_SOURCES ${FILE_PATH})
+        endif()
+    endforeach()
+
+    # 2. CREATE USER-SPACE TARGET
+    add_executable(enclave_system_node ${SIMULATOR_SOURCES})
+
+    # 3. CONFIGURE SIMULATOR INCLUDE PATHS
+    target_include_directories(enclave_system_node PUBLIC 
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/common
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core/intel
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core/amd
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/network
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/boot
     )
+
+    # 4. APPLICATION FLAGS
+    if(MSVC)
+        target_compile_options(enclave_system_node PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:/W4 /WX /EHsc /wd4201 /wd4702>)
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_compile_options(enclave_system_node PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Werror -mrdrnd> $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Werror -std=c++20 -mrdrnd>)
+    endif()
+
 endif()
 
 # Global macro definitions applied safely across all compilation units
@@ -148,8 +113,6 @@ target_compile_definitions(enclave_system_node PRIVATE
     ENCLAVE_DEBUG_MODE=1
     ENCLAVE_SOFTWARE_NETWORK_TRANSIT=1
     MASTER_ARCHITECT="Frederick_Joseph_Lombardi"
-    
-    # FIXED ARCHITECTURE BLOCK: Injects required kernel macros based on host system
     $<$<PLATFORM_ID:Windows>:WIN32 _WINDOWS>
     $<$<AND:$<PLATFORM_ID:Windows>,$<COMPILE_LANGUAGE:C,CXX>>:_AMD64_ _X64_ AMD64>
 )

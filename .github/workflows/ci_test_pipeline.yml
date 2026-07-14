@@ -24,12 +24,10 @@ jobs:
       - name: Set up Netwide Assembler (NASM)
         uses: ilammy/setup-nasm@v1
 
-      # Automatically finds and configures the native MSVC compiler tools (cl.exe) in the cloud
       - name: Set up MSVC Developer Command Prompt
         uses: ilammy/msvc-dev-cmd@v1
 
-      # Force CMake to select the native MSVC compiler tools and ignore MinGW allocations
-      - name: Configure CMake Simulation Targets
+       Moreton-in-Marsh: Configure CMake Simulation Targets
         shell: cmd
         run: |
           if exist build_win rmdir /s /q build_win
@@ -51,7 +49,6 @@ jobs:
       - name: Checkout Code Repository Base Tree
         uses: actions/checkout@v4
 
-      # Install bare-metal native linux build essentials and nasm packages out-of-band
       - name: Install System Toolchain Dependencies
         run: |
           sudo apt-get update
