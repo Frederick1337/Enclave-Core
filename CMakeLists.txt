@@ -21,7 +21,7 @@ file(GLOB_RECURSE SOURCE_FILES
 # Step 1: Filter out platform-specific bootstrapping code based on compile environments
 if(WIN32)
     foreach(FILE_PATH ${SOURCE_FILES})
-        if(FILE_PATH MATCHES "linux_module_wrapper\\.c$")
+        if(FILE_PATH MATCHES "linux_module_wrapper\\.c$" OR FILE_PATH MATCHES "linux_driver_wrapper\\.c$")
             list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
         endif()
     endforeach()
@@ -49,10 +49,7 @@ if(DEFINED ENCLAVE_COMPILE_BARE_METAL)
 else()
     # SIMULATION MODE: Exclude kernel driver modules to prevent local header collision traps
     foreach(FILE_PATH ${SOURCE_FILES})
-        if(FILE_PATH MATCHES "windows_driver_wrapper\\.c$")
-            list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
-        endif()
-        if(FILE_PATH MATCHES "linux_module_wrapper\\.c$")
+        if(FILE_PATH MATCHES "windows_driver_wrapper\\.c$" OR FILE_PATH MATCHES "linux_module_wrapper\\.c$" OR FILE_PATH MATCHES "linux_driver_wrapper\\.c$")
             list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
         endif()
     endforeach()
@@ -103,24 +100,21 @@ endif()
 # =========================================================================
 
 if(MSVC)
-    # FIXED SCOPED COMPILER OPTIONS: Wrapped in compile language condition blocks.
-    # This prevents high-level MSVC flags from leaking into NASM command streams.
     target_compile_options(enclave_system_node PRIVATE 
         $<$<COMPILE_LANGUAGE:C,CXX>:/W4 /WX /GR- /EHsc /GS- /wd4201 /wd4702>
     )
     
-    # Append low-level platform properties to handle link constraints
     if(DEFINED ENCLAVE_COMPILE_BARE_METAL)
         set_target_properties(enclave_system_node PROPERTIES SUFFIX ".sys")
-        # Direct MSVC linker to build a native kernel module infrastructure
         target_link_options(enclave_system_node PRIVATE "/DRIVER" "/SUBSYSTEM:NATIVE")
     endif()
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    # Enforce standard-compliant optimization flags and unlock hardware RDRAND generation natively
+    # LANGUAGE ISOLATION FIXED: Pass specific dialect definitions exclusively to C or CXX source streams
     target_compile_options(enclave_system_node PRIVATE 
-        $<$<COMPILE_LANGUAGE:C,CXX>:-Wall -Wextra -Werror -std=c++20 -mrdrnd>
+        $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Werror -mrdrnd>
+        $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Werror -std=c++20 -mrdrnd>
     )
 endif()
 

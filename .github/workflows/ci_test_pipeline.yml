@@ -24,6 +24,10 @@ jobs:
       - name: Set up Netwide Assembler (NASM)
         uses: ilammy/setup-nasm@v1
 
+      # Automatically finds and configures the native MSVC compiler tools (cl.exe) in the cloud
+      - name: Set up MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
       # Force CMake to select the native MSVC compiler tools and ignore MinGW allocations
       - name: Configure CMake Simulation Targets
         shell: cmd
