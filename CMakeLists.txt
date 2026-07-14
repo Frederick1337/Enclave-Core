@@ -11,16 +11,26 @@ file(GLOB_RECURSE SOURCE_FILES
     "src/*.cpp" 
     "src/*.c"
     "src/common/*.asm"
+    "src/boot/*.asm"
 )
 
 # =========================================================================
 # OPERATING SYSTEM SOURCE FILE FILTER MATRIX
 # =========================================================================
 
-# Step 1: Always filter out incompatible Linux module files when building on Windows
+# Step 1: Filter out platform-specific bootstrapping code based on compile environments
 if(WIN32)
     foreach(FILE_PATH ${SOURCE_FILES})
         if(FILE_PATH MATCHES "linux_module_wrapper\\.c$")
+            list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
+        endif()
+    endforeach()
+else()
+    foreach(FILE_PATH ${SOURCE_FILES})
+        if(FILE_PATH MATCHES "windows_driver_wrapper\\.c$")
+            list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
+        endif()
+        if(FILE_PATH MATCHES "amd_gate\\.asm$")
             list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
         endif()
     endforeach()
@@ -40,6 +50,9 @@ else()
     # SIMULATION MODE: Exclude kernel driver modules to prevent local header collision traps
     foreach(FILE_PATH ${SOURCE_FILES})
         if(FILE_PATH MATCHES "windows_driver_wrapper\\.c$")
+            list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
+        endif()
+        if(FILE_PATH MATCHES "linux_module_wrapper\\.c$")
             list(REMOVE_ITEM SOURCE_FILES ${FILE_PATH})
         endif()
     endforeach()
@@ -66,7 +79,7 @@ target_include_directories(enclave_system_node PUBLIC
 )
 
 # KERNEL MODE ONLY: Bind Windows Kits development headers dynamically using system environment variables
-if(DEFINED ENCLAVE_COMPILE_BARE_METAL)
+if(DEFINED ENCLAVE_COMPILE_BARE_METAL AND WIN32)
     # Safely pull the master environment variable path from the active terminal session state
     set(WDK_INCLUDE_DIR "$ENV{WindowsSdkDir}Include/$ENV{WindowsSDKVersion}km")
     set(WDK_SHARED_DIR "$ENV{WindowsSdkDir}Include/$ENV{WindowsSDKVersion}shared")
@@ -96,13 +109,6 @@ if(MSVC)
         $<$<COMPILE_LANGUAGE:C,CXX>:/W4 /WX /GR- /EHsc /GS- /wd4201 /wd4702>
     )
     
-    # Enable macro definitions safely across all target source units
-    target_compile_definitions(enclave_system_node PRIVATE 
-        ENCLAVE_DEBUG_MODE=1
-        ENCLAVE_SOFTWARE_NETWORK_TRANSIT=1
-        MASTER_ARCHITECT="Frederick_Joseph_Lombardi"
-    )
-    
     # Append low-level platform properties to handle link constraints
     if(DEFINED ENCLAVE_COMPILE_BARE_METAL)
         set_target_properties(enclave_system_node PROPERTIES SUFFIX ".sys")
@@ -110,3 +116,17 @@ if(MSVC)
         target_link_options(enclave_system_node PRIVATE "/DRIVER" "/SUBSYSTEM:NATIVE")
     endif()
 endif()
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # Enforce standard-compliant optimization flags and unlock hardware RDRAND generation natively
+    target_compile_options(enclave_system_node PRIVATE 
+        $<$<COMPILE_LANGUAGE:C,CXX>:-Wall -Wextra -Werror -std=c++20 -mrdrand>
+    )
+endif()
+
+# Global macro definitions applied safely across all compilation units
+target_compile_definitions(enclave_system_node PRIVATE 
+    ENCLAVE_DEBUG_MODE=1
+    ENCLAVE_SOFTWARE_NETWORK_TRANSIT=1
+    MASTER_ARCHITECT="Frederick_Joseph_Lombardi"
+)

@@ -4,12 +4,12 @@
 ; SUBJECT: Deterministic AMD Register Mapping for Ring -1 VMM Transitions
 ; =========================================================================
 
-.code
+section .text
 
 ; Export symbol using standard C-linkage visibility
-public LowLevelAmdVmmcall
+global LowLevelAmdVmmcall
 
-LowLevelAmdVmmcall proc
+LowLevelAmdVmmcall:
     ; Microsoft x64 Fastcall Calling Convention Inputs:
     ; RCX = command_vector
     ; RDX = parameter
@@ -26,6 +26,3 @@ LowLevelAmdVmmcall proc
     ; Return to C++ compiler layer. 
     ; The exit status/confirmation code populated in RAX by the VMM passes back natively.
     ret           
-LowLevelAmdVmmcall endproc
-
-end
